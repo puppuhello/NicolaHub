@@ -1554,42 +1554,95 @@ function fishLoop()
         -- check se già equipaggiato quello giusto
         local cur = c:FindFirstChildOfClass("Tool")
         if cur and S.fishTool ~= "" and cur.Name == S.fishTool then return true end
+        -- qualsiasi tool equipaggiato va bene se non c'è selezione
+        if cur and S.fishTool == "" then
+            S.fishTool = cur.Name
+            print("[NH] 🎣 Già equipaggiato: "..cur.Name)
+            return true
+        end
 
-        -- cerca la canna selezionata dall'utente
-        if S.fishTool ~= "" then
-            local bp = plr:FindFirstChild("Backpack")
-            -- nel backpack
-            if bp then
+        -- debug: stampa contenuto backpack
+        local bp = plr:FindFirstChild("Backpack")
+        if bp then
+            print("[NH] 📦 Backpack contiene:")
+            for _,item in pairs(bp:GetChildren()) do
+                print("[NH]   → "..item.ClassName..": "..item.Name)
+            end
+        else
+            print("[NH] ⚠ Backpack non trovato!")
+        end
+
+        -- METODO 1: cerca nel Backpack (Tool standard)
+        if bp then
+            -- prima cerca per nome selezionato
+            if S.fishTool ~= "" then
                 local t = bp:FindFirstChild(S.fishTool)
                 if t and t:IsA("Tool") then
                     h:EquipTool(t) print("[NH] 🎣 Equipaggiato: "..t.Name) task.wait(0.3) return true
                 end
             end
-            -- già nel character?
-            local t2 = c:FindFirstChild(S.fishTool)
-            if t2 and t2:IsA("Tool") then return true end
-        end
-
-        -- fallback: cerca per nome (fish/rod/canna/pole/harpoon)
-        local bp = plr:FindFirstChild("Backpack")
-        if bp then
+            -- poi cerca per keyword
             for _,t in pairs(bp:GetChildren()) do
                 if t:IsA("Tool") and (t.Name:lower():find("fish") or t.Name:lower():find("rod") or t.Name:lower():find("canna") or t.Name:lower():find("pole") or t.Name:lower():find("harpoon")) then
-                    h:EquipTool(t) print("[NH] 🎣 Equipaggiato (auto): "..t.Name)
-                    S.fishTool = t.Name saveConfig()
-                    task.wait(0.3) return true
+                    h:EquipTool(t) S.fishTool=t.Name saveConfig()
+                    print("[NH] 🎣 Equipaggiato (keyword): "..t.Name) task.wait(0.3) return true
                 end
             end
-            -- ultimo fallback: equippa il PRIMO tool disponibile
+            -- equippa qualsiasi tool
             for _,t in pairs(bp:GetChildren()) do
                 if t:IsA("Tool") then
-                    h:EquipTool(t) print("[NH] 🎣 Equipaggiato (primo disponibile): "..t.Name)
-                    S.fishTool = t.Name saveConfig()
-                    task.wait(0.3) return true
+                    h:EquipTool(t) S.fishTool=t.Name saveConfig()
+                    print("[NH] 🎣 Equipaggiato (primo): "..t.Name) task.wait(0.3) return true
                 end
             end
         end
-        print("[NH] ⚠ Nessun tool nell'inventario!")
+
+        -- METODO 2: cerca remotes per equipaggiare items del gioco
+        pcall(function()
+            local rs = game:GetService("ReplicatedStorage")
+            for _,r in pairs(rs:GetDescendants()) do
+                if r:IsA("RemoteEvent") and (r.Name:lower():find("equip") or r.Name:lower():find("slot") or r.Name:lower():find("use")) then
+                    print("[NH] 🔧 Trovato equip remote: "..r:GetFullName())
+                    -- prova a equipaggiare slot 1-9
+                    for slot=1,9 do
+                        pcall(function() r:FireServer(slot) end)
+                        pcall(function() r:FireServer("slot"..slot) end)
+                        pcall(function() r:FireServer({slot=slot}) end)
+                    end
+                end
+            end
+        end)
+
+        -- METODO 3: simula tasti 1-6 per cambiare slot (il gioco usa hotbar)
+        pcall(function()
+            if VIM then
+                local keys = {Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four, Enum.KeyCode.Five, Enum.KeyCode.Six}
+                for i,key in ipairs(keys) do
+                    VIM:SendKeyEvent(true, key, false, game)
+                    task.wait(0.05)
+                    VIM:SendKeyEvent(false, key, false, game)
+                    task.wait(0.3)
+                    local equipped = c:FindFirstChildOfClass("Tool")
+                    if equipped then
+                        S.fishTool = equipped.Name saveConfig()
+                        print("[NH] 🎣 Equipaggiato via tasto "..i..": "..equipped.Name)
+                        return
+                    end
+                end
+            end
+        end)
+
+        -- check finale se qualcosa è stato equipaggiato
+        task.wait(0.5)
+        local finalTool = c:FindFirstChildOfClass("Tool")
+        if finalTool then
+            S.fishTool = finalTool.Name saveConfig()
+            print("[NH] 🎣 Tool trovato dopo equip: "..finalTool.Name)
+            return true
+        end
+
+        fishStatus.Text="⚠ No tool! Equippa manualmente"
+        print("[NH] ⚠ Nessun tool equipaggiabile trovato")
         return false
     end
 

@@ -1,0 +1,1268 @@
+--[[
+    ╔══════════════════════════════════════════════╗
+    ║           NICOLA HUB v5.0                    ║
+    ║     Legends Re:Written — Full Autofarm       ║
+    ║     Toggle: Right Shift                      ║
+    ╚══════════════════════════════════════════════╝
+    SLOT SYSTEM:
+    1-3 = Magic (skill, activate e torna all'arma)
+    4   = Weapon (M1 spam)
+    5   = Blessing (M1)
+    6   = Spec (opzionale)
+]]
+
+if game:GetService("CoreGui"):FindFirstChild("NicolaHub") then
+    game:GetService("CoreGui"):FindFirstChild("NicolaHub"):Destroy()
+end
+
+local Players=game:GetService("Players")
+local RS=game:GetService("ReplicatedStorage")
+local RunService=game:GetService("RunService")
+local TweenService=game:GetService("TweenService")
+local UIS=game:GetService("UserInputService")
+local CoreGui=game:GetService("CoreGui")
+local plr=Players.LocalPlayer
+local remotes=RS:FindFirstChild("Remotes")
+
+-- ═══ STATE ═══
+local S = {
+    afOn=false, fishOn=false, mineOn=false, flyOn=false, noclip=false,
+    autoPickup=true, antiAFK=true,
+    flySpeed=120, atkSpeed=0.25, atkRange=16, mobHeight=5,
+    magicInterval=3, hitboxMult=5,
+    vacuum=false, vacuumRange=80,
+    kills=0, drops=0, fish=0, ores=0,
+    status="Idle", startTime=0,
+    selectedMobs={}, selectedOres={},
+    primaryTool="",
+    useWeapon=true, useBlessing=false,
+    useMagic={},
+}
+
+local C = {
+    bg=Color3.fromRGB(18,18,28), panel=Color3.fromRGB(28,28,42),
+    dark=Color3.fromRGB(12,12,18), accent=Color3.fromRGB(130,80,255),
+    green=Color3.fromRGB(50,205,100), red=Color3.fromRGB(235,60,60),
+    orange=Color3.fromRGB(255,170,40), cyan=Color3.fromRGB(40,200,220),
+    text=Color3.fromRGB(225,225,235), dim=Color3.fromRGB(120,120,145),
+    border=Color3.fromRGB(45,45,65), check=Color3.fromRGB(80,220,120),
+    uncheck=Color3.fromRGB(55,55,70),
+}
+
+-- ═══ UTILS ═══
+local function chr() return plr.Character end
+local function hrpf() local c=chr() return c and c:FindFirstChild("HumanoidRootPart") end
+local function humf() local c=chr() return c and c:FindFirstChildOfClass("Humanoid") end
+local function alive()
+    local c = plr.Character
+    if not c then return false end
+    local h = c:FindFirstChildOfClass("Humanoid")
+    local r = c:FindFirstChild("HumanoidRootPart")
+    return h and r and h.Health > 0
+end
+local function mobHP(m) local h=m:FindFirstChild("Health") return h and h.Value or 0 end
+local function mobMaxHP(m) local h=m:FindFirstChild("MaxHealth") return h and h.Value or 0 end
+local function mobAlive(m) return m and m.Parent and mobHP(m)>0 end
+local function mobPos(m)
+    for _,d in pairs(m:GetDescendants()) do if d:IsA("BasePart") then return d.Position end end
+    local ok,p=pcall(function() return m:GetPivot().Position end) return ok and p or nil
+end
+local function elapsed()
+    if S.startTime==0 then return "00:00" end
+    local e=tick()-S.startTime return string.format("%02d:%02d",math.floor(e/60),math.floor(e%60))
+end
+local function oreBase(n) return n:gsub("%d+$","") end
+local function mobBase(n) return n:gsub("%d+$","") end
+
+-- ═══ HITBOX EXPANSION ═══
+local expandedMobs = {} -- track which mobs we expanded
+
+local function expandHitbox(mob)
+    if not mob or not mob.Parent then return end
+    if expandedMobs[mob] then return end -- già espanso
+    expandedMobs[mob] = true
+
+    pcall(function()
+        for _, part in pairs(mob:GetDescendants()) do
+            if part:IsA("BasePart") then
+                if not part:GetAttribute("NHorig") then
+                    part:SetAttribute("NHorig", true)
+                    part:SetAttribute("NHsx", part.Size.X)
+                    part:SetAttribute("NHsy", part.Size.Y)
+                    part:SetAttribute("NHsz", part.Size.Z)
+                    part.Size = part.Size * S.hitboxMult
+                    part.Transparency = 1
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+end
+
+local function shrinkHitbox(mob)
+    if not mob or not mob.Parent then return end
+    expandedMobs[mob] = nil
+
+    pcall(function()
+        for _, part in pairs(mob:GetDescendants()) do
+            if part:IsA("BasePart") and part:GetAttribute("NHorig") then
+                local sx = part:GetAttribute("NHsx") or part.Size.X
+                local sy = part:GetAttribute("NHsy") or part.Size.Y
+                local sz = part:GetAttribute("NHsz") or part.Size.Z
+                part.Size = Vector3.new(sx, sy, sz)
+                part:SetAttribute("NHorig", nil)
+            end
+        end
+    end)
+end
+
+-- ═══ MOB VACUUM ═══
+local function vacuumMobs()
+    if not S.vacuum then return end
+    local r = hrpf()
+    if not r then return end
+    local myPos = r.Position
+    local mf = workspace:FindFirstChild("Mobs")
+    if not mf then return end
+
+    -- punto davanti al player dove stackare i mob
+    local stackPos = myPos + Vector3.new(0, -S.mobHeight + 2, 0)
+
+    for _, m in pairs(mf:GetChildren()) do
+        if not mobAlive(m) then continue end
+        local base = mobBase(m.Name)
+        if not S.selectedMobs[base] and not S.selectedMobs[m.Name] then continue end
+
+        -- check distanza
+        local mPos = mobPos(m)
+        if not mPos then continue end
+        local dist = (myPos - mPos).Magnitude
+        if dist > S.vacuumRange or dist < 3 then continue end
+
+        -- sposta tutte le parti del mob verso il player
+        pcall(function()
+            local offset = CFrame.new(stackPos) - m:GetPivot()
+            for _, part in pairs(m:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CFrame = part.CFrame + offset.Position
+                    part.Velocity = Vector3.zero
+                    part.CanCollide = false
+                    part.Anchored = false
+                end
+            end
+        end)
+
+        -- prova anche con PivotTo
+        pcall(function()
+            m:PivotTo(CFrame.new(stackPos))
+        end)
+    end
+end
+
+-- ═══ FLY SYSTEM ═══
+local flyBV, flyBG
+
+local function ensureFly()
+    local c = plr.Character
+    if not c then return false end
+    local r = c:FindFirstChild("HumanoidRootPart")
+    if not r then return false end
+
+    local bv = r:FindFirstChild("NHfly")
+    if not bv then
+        bv = Instance.new("BodyVelocity")
+        bv.Name="NHfly"
+        bv.MaxForce=Vector3.new(math.huge,math.huge,math.huge)
+        bv.Velocity=Vector3.zero
+        bv.Parent=r
+    end
+    flyBV = bv
+
+    local bg = r:FindFirstChild("NHgyro")
+    if not bg then
+        bg = Instance.new("BodyGyro")
+        bg.Name="NHgyro"
+        bg.MaxTorque=Vector3.new(math.huge,math.huge,math.huge)
+        bg.D=100 bg.P=10000
+        bg.Parent=r
+    end
+    flyBG = bg
+    return true
+end
+
+local function stopFly()
+    pcall(function()
+        local c=plr.Character
+        if c then
+            local r=c:FindFirstChild("HumanoidRootPart")
+            if r then
+                if r:FindFirstChild("NHfly") then r:FindFirstChild("NHfly"):Destroy() end
+                if r:FindFirstChild("NHgyro") then r:FindFirstChild("NHgyro"):Destroy() end
+            end
+        end
+    end)
+    flyBV=nil flyBG=nil
+end
+
+local function flyTo(target)
+    if not ensureFly() then return false end
+    local r=hrpf() if not r then return false end
+    local dir=target-r.Position local dist=dir.Magnitude
+    if dist<3 then flyBV.Velocity=Vector3.zero return true end
+    flyBV.Velocity=dir.Unit*math.min(S.flySpeed,dist*3)
+    if flyBG then flyBG.CFrame=CFrame.new(r.Position,target) end
+    return false
+end
+
+local function flyStop()
+    if flyBV then pcall(function() flyBV.Velocity=Vector3.zero end) end
+end
+
+-- ═══ WAIT FOR RESPAWN (ROBUSTO) ═══
+local function waitForRespawn(maxWait)
+    maxWait = maxWait or 15
+    print("[NH] Aspetto respawn...")
+    local t0 = tick()
+
+    -- aspetta che il vecchio character muoia e il nuovo arrivi
+    while (tick()-t0) < maxWait do
+        if not gui or not gui.Parent then return false end
+        task.wait(0.5)
+
+        local c = plr.Character
+        if c then
+            local h = c:FindFirstChildOfClass("Humanoid")
+            local r = c:FindFirstChild("HumanoidRootPart")
+            if h and r and h.Health > 0 then
+                -- character è vivo! aspetta ancora un po' per stabilità
+                task.wait(2)
+                -- ri-verifica
+                c = plr.Character
+                if c then
+                    h = c:FindFirstChildOfClass("Humanoid")
+                    r = c:FindFirstChild("HumanoidRootPart")
+                    if h and r and h.Health > 0 then
+                        print("[NH] Respawn OK! HP:" .. h.Health)
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    print("[NH] Respawn timeout!")
+    return false
+end
+
+-- ═══ EQUIP TOOL ═══
+local function equipToolByName(toolName)
+    local c = plr.Character
+    if not c then return nil end
+    local h = c:FindFirstChildOfClass("Humanoid")
+    if not h then return nil end
+
+    -- già equipaggiato?
+    local cur = c:FindFirstChildOfClass("Tool")
+    if cur and cur.Name == toolName then return cur end
+
+    -- cerca nel backpack
+    local bp = plr:FindFirstChild("Backpack")
+    if bp then
+        local t = bp:FindFirstChild(toolName)
+        if t and t:IsA("Tool") then
+            h:EquipTool(t)
+            task.wait(0.15)
+            return c:FindFirstChildOfClass("Tool")
+        end
+    end
+    return nil
+end
+
+local function equipPrimary()
+    local c = plr.Character
+    if not c then return nil end
+    local h = c:FindFirstChildOfClass("Humanoid")
+    if not h then return nil end
+
+    -- se c'è un primary tool selezionato, equippa quello
+    if S.primaryTool and S.primaryTool ~= "" then
+        local cur = c:FindFirstChildOfClass("Tool")
+        if cur and cur.Name == S.primaryTool then return cur end -- già equipaggiato
+        -- cerca nel backpack
+        local bp = plr:FindFirstChild("Backpack")
+        if bp then
+            local t = bp:FindFirstChild(S.primaryTool)
+            if t and t:IsA("Tool") then
+                h:EquipTool(t)
+                task.wait(0.15)
+                return c:FindFirstChildOfClass("Tool")
+            end
+        end
+        -- potrebbe essere nel character (non equipaggiato correttamente)
+        local t2 = c:FindFirstChild(S.primaryTool)
+        if t2 and t2:IsA("Tool") then return t2 end
+    end
+
+    -- fallback: equippa qualsiasi tool
+    local cur = c:FindFirstChildOfClass("Tool")
+    if cur then return cur end
+    local bp = plr:FindFirstChild("Backpack")
+    if bp then
+        local t = bp:FindFirstChildOfClass("Tool")
+        if t then h:EquipTool(t) task.wait(0.15) return c:FindFirstChildOfClass("Tool") end
+    end
+    return nil
+end
+-- alias
+local equipAnyTool = equipPrimary
+
+-- ═══ ANTI-CLIMB + ANTI-JUMP + NOCLIP ═══
+local function disableClimb()
+    pcall(function()
+        local c = plr.Character
+        if not c then return end
+        local h = c:FindFirstChildOfClass("Humanoid")
+        if not h then return end
+        -- disabilita TUTTI gli state problematici
+        h:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+        h:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        h:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+        h:SetStateEnabled(Enum.HumanoidStateType.GettingUp, false)
+        h:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+        h:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+        h:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+        -- forza SEMPRE in Physics durante autofarm/fish/mine
+        if S.afOn or S.fishOn or S.mineOn then
+            local state = h:GetState()
+            if state ~= Enum.HumanoidStateType.Physics then
+                h:ChangeState(Enum.HumanoidStateType.Physics)
+            end
+            h.Jump = false -- blocca jump
+        end
+    end)
+end
+
+RunService.Stepped:Connect(function()
+    if S.noclip or S.afOn or S.fishOn or S.mineOn then
+        pcall(function()
+            local c=plr.Character if c then
+                for _,p in pairs(c:GetDescendants()) do
+                    if p:IsA("BasePart") then p.CanCollide=false end
+                end
+            end
+        end)
+        disableClimb()
+    end
+end)
+
+-- manual fly
+RunService.Heartbeat:Connect(function()
+    -- extra noclip
+    if S.noclip or S.afOn or S.fishOn or S.mineOn then
+        pcall(function()
+            local c=plr.Character if c then
+                for _,p in pairs(c:GetDescendants()) do
+                    if p:IsA("BasePart") then p.CanCollide=false end
+                end
+            end
+        end)
+        disableClimb()
+    end
+    -- manual fly
+    if S.flyOn and not S.afOn and not S.fishOn and not S.mineOn then
+        if not ensureFly() then return end
+        local cam=workspace.CurrentCamera local vel=Vector3.zero
+        if UIS:IsKeyDown(Enum.KeyCode.W) then vel=vel+cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then vel=vel-cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then vel=vel-cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then vel=vel+cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then vel=vel+Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then vel=vel-Vector3.new(0,1,0) end
+        flyBV.Velocity=vel.Magnitude>0 and vel.Unit*S.flySpeed or Vector3.zero
+    elseif not S.afOn and not S.fishOn and not S.mineOn then
+        if flyBV then stopFly() end
+    end
+end)
+
+-- ═══ GUI ═══
+local gui=Instance.new("ScreenGui")
+gui.Name="NicolaHub" gui.ResetOnSpawn=false gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling gui.Parent=CoreGui
+
+local main=Instance.new("Frame",gui) main.Name="Main"
+main.Size=UDim2.new(0,360,0,480) main.Position=UDim2.new(0.5,-180,0.5,-240)
+main.BackgroundColor3=C.bg main.BorderSizePixel=0
+Instance.new("UICorner",main).CornerRadius=UDim.new(0,12)
+Instance.new("UIStroke",main).Color=C.border
+
+-- title
+local tb=Instance.new("Frame",main) tb.Size=UDim2.new(1,0,0,36) tb.BackgroundColor3=C.dark tb.BorderSizePixel=0
+Instance.new("UICorner",tb).CornerRadius=UDim.new(0,12)
+local tbF=Instance.new("Frame",tb) tbF.Size=UDim2.new(1,0,0,12) tbF.Position=UDim2.new(0,0,1,-12) tbF.BackgroundColor3=C.dark tbF.BorderSizePixel=0
+local tl=Instance.new("TextLabel",tb) tl.Text="⚡ NICOLA HUB" tl.Size=UDim2.new(1,-40,1,0) tl.Position=UDim2.new(0,12,0,0)
+tl.BackgroundTransparency=1 tl.TextColor3=C.accent tl.TextSize=15 tl.Font=Enum.Font.GothamBold tl.TextXAlignment=Enum.TextXAlignment.Left
+local xb=Instance.new("TextButton",tb) xb.Text="✕" xb.Size=UDim2.new(0,26,0,26) xb.Position=UDim2.new(1,-32,0,5)
+xb.BackgroundColor3=C.red xb.TextColor3=Color3.new(1,1,1) xb.TextSize=12 xb.Font=Enum.Font.GothamBold xb.BorderSizePixel=0
+Instance.new("UICorner",xb).CornerRadius=UDim.new(0,6)
+xb.MouseButton1Click:Connect(function() S.afOn=false S.fishOn=false S.mineOn=false gui:Destroy() end)
+
+-- drag
+local dg,ds,dp=false,nil,nil
+tb.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dg=true ds=i.Position dp=main.Position end end)
+tb.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dg=false end end)
+UIS.InputChanged:Connect(function(i) if dg and i.UserInputType==Enum.UserInputType.MouseMovement then local d=i.Position-ds main.Position=UDim2.new(dp.X.Scale,dp.X.Offset+d.X,dp.Y.Scale,dp.Y.Offset+d.Y) end end)
+UIS.InputBegan:Connect(function(i,p) if not p and i.KeyCode==Enum.KeyCode.RightShift then main.Visible=not main.Visible end end)
+
+-- tabs
+local tabBar=Instance.new("Frame",main) tabBar.Size=UDim2.new(1,-12,0,26) tabBar.Position=UDim2.new(0,6,0,40) tabBar.BackgroundTransparency=1
+local tabNames={"Farm","Fish","Mine","Player"}
+local tabBtns,tabPages={},{}
+for i,name in ipairs(tabNames) do
+    local b=Instance.new("TextButton",tabBar) b.Text=name
+    b.Size=UDim2.new(1/#tabNames,-2,1,0) b.Position=UDim2.new((i-1)/#tabNames,1,0,0)
+    b.BackgroundColor3=i==1 and C.accent or C.panel b.TextColor3=C.text b.TextSize=11 b.Font=Enum.Font.GothamBold b.BorderSizePixel=0
+    Instance.new("UICorner",b).CornerRadius=UDim.new(0,6)
+    tabBtns[name]=b
+    local p=Instance.new("ScrollingFrame",main) p.Size=UDim2.new(1,-12,1,-76) p.Position=UDim2.new(0,6,0,70)
+    p.BackgroundTransparency=1 p.BorderSizePixel=0 p.ScrollBarThickness=3 p.ScrollBarImageColor3=C.accent
+    p.CanvasSize=UDim2.new(0,0,0,0) p.AutomaticCanvasSize=Enum.AutomaticSize.Y p.Visible=(name=="Farm")
+    Instance.new("UIListLayout",p).Padding=UDim.new(0,3)
+    tabPages[name]=p
+    b.MouseButton1Click:Connect(function()
+        for n,btn in pairs(tabBtns) do btn.BackgroundColor3=n==name and C.accent or C.panel end
+        for n,pg in pairs(tabPages) do pg.Visible=n==name end
+    end)
+end
+
+-- ═══ UI HELPERS ═══
+local function sec(p,t)
+    local f=Instance.new("Frame",p) f.Size=UDim2.new(1,0,0,16) f.BackgroundTransparency=1
+    local l=Instance.new("TextLabel",f) l.Text="─ "..t.." ─" l.Size=UDim2.new(1,0,1,0)
+    l.BackgroundTransparency=1 l.TextColor3=C.accent l.TextSize=10 l.Font=Enum.Font.GothamBold
+end
+
+local function lbl(p,t)
+    local l=Instance.new("TextLabel",p) l.Text=t l.Size=UDim2.new(1,0,0,16) l.BackgroundTransparency=1
+    l.TextColor3=C.text l.TextSize=11 l.Font=Enum.Font.Gotham l.TextXAlignment=Enum.TextXAlignment.Left
+    Instance.new("UIPadding",l).PaddingLeft=UDim.new(0,8) return l
+end
+
+local function btn(p,t,col,cb)
+    local b=Instance.new("TextButton",p) b.Text=t b.Size=UDim2.new(1,0,0,26) b.BackgroundColor3=col
+    b.TextColor3=Color3.new(1,1,1) b.TextSize=11 b.Font=Enum.Font.GothamBold b.BorderSizePixel=0
+    Instance.new("UICorner",b).CornerRadius=UDim.new(0,6)
+    if cb then b.MouseButton1Click:Connect(cb) end return b
+end
+
+local function makeToggle(p,t,def,cb)
+    local f=Instance.new("Frame",p) f.Size=UDim2.new(1,0,0,28) f.BackgroundColor3=C.panel f.BorderSizePixel=0
+    Instance.new("UICorner",f).CornerRadius=UDim.new(0,6)
+    local l=Instance.new("TextLabel",f) l.Text=t l.Size=UDim2.new(1,-50,1,0) l.Position=UDim2.new(0,10,0,0)
+    l.BackgroundTransparency=1 l.TextColor3=C.text l.TextSize=12 l.Font=Enum.Font.GothamBold l.TextXAlignment=Enum.TextXAlignment.Left
+    local bg=Instance.new("Frame",f) bg.Size=UDim2.new(0,36,0,18) bg.Position=UDim2.new(1,-42,0.5,-9) bg.BorderSizePixel=0
+    bg.BackgroundColor3=def and C.green or C.uncheck
+    Instance.new("UICorner",bg).CornerRadius=UDim.new(1,0)
+    local dot=Instance.new("Frame",bg) dot.Size=UDim2.new(0,14,0,14) dot.BackgroundColor3=Color3.new(1,1,1) dot.BorderSizePixel=0
+    dot.Position=def and UDim2.new(1,-16,0.5,-7) or UDim2.new(0,2,0.5,-7)
+    Instance.new("UICorner",dot).CornerRadius=UDim.new(1,0)
+    local on=def
+    local obj={frame=f,label=l}
+    function obj.isOn() return on end
+    function obj.setOn(v) on=v
+        TweenService:Create(bg,TweenInfo.new(0.1),{BackgroundColor3=on and C.green or C.uncheck}):Play()
+        TweenService:Create(dot,TweenInfo.new(0.1),{Position=on and UDim2.new(1,-16,0.5,-7) or UDim2.new(0,2,0.5,-7)}):Play()
+    end
+    local b2=Instance.new("TextButton",bg) b2.Text="" b2.Size=UDim2.new(1,0,1,0) b2.BackgroundTransparency=1
+    b2.MouseButton1Click:Connect(function() on=not on obj.setOn(on) if cb then cb(on) end end)
+    return obj
+end
+
+local function makeSlider(p,t,mn,mx,df,cb)
+    local f=Instance.new("Frame",p) f.Size=UDim2.new(1,0,0,38) f.BackgroundColor3=C.panel f.BorderSizePixel=0
+    Instance.new("UICorner",f).CornerRadius=UDim.new(0,6)
+    local vl=Instance.new("TextLabel",f) vl.Size=UDim2.new(1,-10,0,16) vl.Position=UDim2.new(0,8,0,1)
+    vl.BackgroundTransparency=1 vl.TextColor3=C.text vl.TextSize=10 vl.Font=Enum.Font.Gotham
+    vl.TextXAlignment=Enum.TextXAlignment.Left vl.Text=t..": "..math.floor(df)
+    local tr=Instance.new("Frame",f) tr.Size=UDim2.new(1,-20,0,6) tr.Position=UDim2.new(0,10,0,24)
+    tr.BackgroundColor3=C.dark tr.BorderSizePixel=0 Instance.new("UICorner",tr).CornerRadius=UDim.new(1,0)
+    local fr=math.clamp((df-mn)/(mx-mn),0,1)
+    local fl=Instance.new("Frame",tr) fl.Size=UDim2.new(fr,0,1,0) fl.BackgroundColor3=C.accent fl.BorderSizePixel=0
+    Instance.new("UICorner",fl).CornerRadius=UDim.new(1,0)
+    local kn=Instance.new("Frame",fl) kn.Size=UDim2.new(0,10,0,10) kn.Position=UDim2.new(1,-5,0.5,-5)
+    kn.BackgroundColor3=Color3.new(1,1,1) kn.BorderSizePixel=0 Instance.new("UICorner",kn).CornerRadius=UDim.new(1,0)
+    local sb=Instance.new("TextButton",tr) sb.Text="" sb.Size=UDim2.new(1,0,1,12) sb.Position=UDim2.new(0,0,0,-6) sb.BackgroundTransparency=1
+    local sd=false
+    sb.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then sd=true end end)
+    sb.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then sd=false end end)
+    local function upd(x) local rel=math.clamp((x-tr.AbsolutePosition.X)/tr.AbsoluteSize.X,0,1)
+        fl.Size=UDim2.new(rel,0,1,0) local val=math.floor(mn+rel*(mx-mn)) vl.Text=t..": "..val if cb then cb(val) end
+    end
+    UIS.InputChanged:Connect(function(i) if sd and i.UserInputType==Enum.UserInputType.MouseMovement then upd(i.Position.X) end end)
+    sb.MouseButton1Click:Connect(function() upd(UIS:GetMouseLocation().X) end)
+end
+
+local function makeChecklist(parent, items, stateTable)
+    local container=Instance.new("Frame",parent) container.Size=UDim2.new(1,0,0,0)
+    container.BackgroundColor3=C.panel container.BorderSizePixel=0 container.AutomaticSize=Enum.AutomaticSize.Y
+    Instance.new("UICorner",container).CornerRadius=UDim.new(0,6)
+    local pad=Instance.new("UIPadding",container) pad.PaddingTop=UDim.new(0,4) pad.PaddingBottom=UDim.new(0,4) pad.PaddingLeft=UDim.new(0,6) pad.PaddingRight=UDim.new(0,6)
+    Instance.new("UIListLayout",container).Padding=UDim.new(0,2)
+    for _,item in ipairs(items) do
+        local row=Instance.new("Frame",container) row.Size=UDim2.new(1,0,0,20) row.BackgroundTransparency=1
+        local box=Instance.new("Frame",row) box.Size=UDim2.new(0,14,0,14) box.Position=UDim2.new(0,0,0.5,-7)
+        box.BackgroundColor3=stateTable[item.name] and C.check or C.uncheck box.BorderSizePixel=0
+        Instance.new("UICorner",box).CornerRadius=UDim.new(0,3)
+        local tick=Instance.new("TextLabel",box) tick.Text="✓" tick.Size=UDim2.new(1,0,1,0)
+        tick.BackgroundTransparency=1 tick.TextColor3=Color3.new(1,1,1) tick.TextSize=10 tick.Font=Enum.Font.GothamBold
+        tick.Visible=stateTable[item.name]==true
+        local txt=item.name if item.count then txt=txt.." ("..item.count..")" end
+        if item.hp then txt=txt.." HP:"..item.hp end
+        local label=Instance.new("TextLabel",row) label.Text=txt
+        label.Size=UDim2.new(1,-20,1,0) label.Position=UDim2.new(0,20,0,0) label.BackgroundTransparency=1
+        label.TextColor3=C.text label.TextSize=11 label.Font=Enum.Font.Gotham label.TextXAlignment=Enum.TextXAlignment.Left
+        local cb2=Instance.new("TextButton",row) cb2.Text="" cb2.Size=UDim2.new(1,0,1,0) cb2.BackgroundTransparency=1
+        cb2.MouseButton1Click:Connect(function()
+            stateTable[item.name]=not stateTable[item.name]
+            box.BackgroundColor3=stateTable[item.name] and C.check or C.uncheck
+            tick.Visible=stateTable[item.name]
+        end)
+    end
+    return container
+end
+
+-- ═══ COLLAPSIBLE DROPDOWN ═══
+local function makeDropdown(parent, title, items, stateTable, refreshCb)
+    local wrapper = Instance.new("Frame",parent) wrapper.Size=UDim2.new(1,0,0,0)
+    wrapper.BackgroundTransparency=1 wrapper.AutomaticSize=Enum.AutomaticSize.Y
+    Instance.new("UIListLayout",wrapper).Padding=UDim.new(0,0)
+
+    -- count selected
+    local function countSel()
+        local n=0 for _,item in ipairs(items) do if stateTable[item.name] then n=n+1 end end return n
+    end
+
+    -- header button
+    local header=Instance.new("TextButton",wrapper) header.Size=UDim2.new(1,0,0,28)
+    header.BackgroundColor3=C.panel header.BorderSizePixel=0
+    header.TextColor3=C.text header.TextSize=12 header.Font=Enum.Font.GothamBold
+    header.TextXAlignment=Enum.TextXAlignment.Left
+    Instance.new("UICorner",header).CornerRadius=UDim.new(0,6)
+    local hPad=Instance.new("UIPadding",header) hPad.PaddingLeft=UDim.new(0,10)
+
+    local arrow = "▶"
+    local open = false
+
+    local function updHeader()
+        header.Text = (open and "▼ " or "▶ ") .. title .. " (" .. countSel() .. "/" .. #items .. ")"
+    end
+    updHeader()
+
+    -- dropdown content (hidden by default)
+    local content=Instance.new("Frame",wrapper) content.Size=UDim2.new(1,0,0,0)
+    content.BackgroundColor3=C.dark content.BorderSizePixel=0 content.Visible=false
+    content.AutomaticSize=Enum.AutomaticSize.Y
+    Instance.new("UICorner",content).CornerRadius=UDim.new(0,6)
+    local cPad=Instance.new("UIPadding",content) cPad.PaddingTop=UDim.new(0,4) cPad.PaddingBottom=UDim.new(0,4) cPad.PaddingLeft=UDim.new(0,6) cPad.PaddingRight=UDim.new(0,6)
+    Instance.new("UIListLayout",content).Padding=UDim.new(0,2)
+
+    -- populate items
+    local function populate()
+        for _,ch in pairs(content:GetChildren()) do if ch:IsA("Frame") then ch:Destroy() end end
+        for _,item in ipairs(items) do
+            local row=Instance.new("Frame",content) row.Size=UDim2.new(1,0,0,20) row.BackgroundTransparency=1
+            local box=Instance.new("Frame",row) box.Size=UDim2.new(0,14,0,14) box.Position=UDim2.new(0,0,0.5,-7)
+            box.BackgroundColor3=stateTable[item.name] and C.check or C.uncheck box.BorderSizePixel=0
+            Instance.new("UICorner",box).CornerRadius=UDim.new(0,3)
+            local tk=Instance.new("TextLabel",box) tk.Text="✓" tk.Size=UDim2.new(1,0,1,0)
+            tk.BackgroundTransparency=1 tk.TextColor3=Color3.new(1,1,1) tk.TextSize=10 tk.Font=Enum.Font.GothamBold
+            tk.Visible=stateTable[item.name]==true
+            local txt=item.name
+            if item.count then txt=txt.." ("..item.count..")" end
+            if item.hp then txt=txt.." HP:"..item.hp end
+            local lb=Instance.new("TextLabel",row) lb.Text=txt
+            lb.Size=UDim2.new(1,-20,1,0) lb.Position=UDim2.new(0,20,0,0) lb.BackgroundTransparency=1
+            lb.TextColor3=C.text lb.TextSize=11 lb.Font=Enum.Font.Gotham lb.TextXAlignment=Enum.TextXAlignment.Left
+            local cb=Instance.new("TextButton",row) cb.Text="" cb.Size=UDim2.new(1,0,1,0) cb.BackgroundTransparency=1
+            cb.MouseButton1Click:Connect(function()
+                stateTable[item.name]=not stateTable[item.name]
+                box.BackgroundColor3=stateTable[item.name] and C.check or C.uncheck
+                tk.Visible=stateTable[item.name]
+                updHeader()
+            end)
+        end
+    end
+    populate()
+
+    header.MouseButton1Click:Connect(function()
+        open = not open
+        content.Visible = open
+        updHeader()
+    end)
+
+    -- return wrapper + refresh function
+    local obj = {wrapper=wrapper, header=header, content=content}
+    function obj.refresh(newItems)
+        items = newItems
+        populate()
+        updHeader()
+    end
+    return obj
+end
+
+-- ═══ FARM PAGE ═══
+local fp=tabPages["Farm"]
+sec(fp,"AUTOFARM")
+local afToggle, fishToggle, mineToggle
+
+afToggle=makeToggle(fp,"⚔ Autofarm",false,function(on)
+    S.afOn=on
+    if on then
+        if S.fishOn then S.fishOn=false fishToggle.setOn(false) end
+        if S.mineOn then S.mineOn=false mineToggle.setOn(false) end
+        task.spawn(function()
+            while S.afOn and gui and gui.Parent do
+                local ok, err = pcall(farmLoop)
+                if not ok then
+                    print("[NH] ⚠ FarmLoop crashato: " .. tostring(err))
+                    print("[NH] Riavvio automatico in 3s...")
+                    task.wait(3)
+                else
+                    break -- uscito normalmente (S.afOn = false)
+                end
+            end
+        end)
+    end
+end)
+local statusLbl=lbl(fp,"Status: Idle")
+local statsLbl=lbl(fp,"Kills: 0 | Drops: 0 | 00:00")
+
+sec(fp,"ATTACCO")
+
+-- Primary tool dropdown
+local primaryDropdown
+local primaryLabel=lbl(fp,"Primary: nessuno")
+
+local function scanAllTools()
+    local bp=plr:FindFirstChild("Backpack")
+    local c=plr.Character
+    local allTools={}
+    if bp then for _,t in pairs(bp:GetChildren()) do if t:IsA("Tool") then table.insert(allTools,t) end end end
+    if c then for _,t in pairs(c:GetChildren()) do if t:IsA("Tool") then table.insert(allTools,t) end end end
+
+    -- PRIMARY: tutti i tool, uno solo selezionabile
+    -- ricostruisco il container ogni volta
+    if primaryDropdown then primaryDropdown.wrapper:Destroy() primaryDropdown=nil end
+
+    local primItems = {}
+    for _,t in ipairs(allTools) do
+        table.insert(primItems, {name=t.Name})
+    end
+
+    -- Dropdown per primary (click per selezionare UNO)
+    local pw = Instance.new("Frame",fp) pw.Size=UDim2.new(1,0,0,0)
+    pw.BackgroundTransparency=1 pw.AutomaticSize=Enum.AutomaticSize.Y
+    Instance.new("UIListLayout",pw).Padding=UDim.new(0,0)
+
+    local ph=Instance.new("TextButton",pw) ph.Size=UDim2.new(1,0,0,28)
+    ph.BackgroundColor3=C.panel ph.BorderSizePixel=0 ph.TextColor3=C.text ph.TextSize=12
+    ph.Font=Enum.Font.GothamBold ph.TextXAlignment=Enum.TextXAlignment.Left
+    Instance.new("UICorner",ph).CornerRadius=UDim.new(0,6)
+    Instance.new("UIPadding",ph).PaddingLeft=UDim.new(0,10)
+
+    local primOpen = false
+    local pc = Instance.new("Frame",pw) pc.Size=UDim2.new(1,0,0,0)
+    pc.BackgroundColor3=C.dark pc.BorderSizePixel=0 pc.Visible=false
+    pc.AutomaticSize=Enum.AutomaticSize.Y
+    Instance.new("UICorner",pc).CornerRadius=UDim.new(0,6)
+    local pp=Instance.new("UIPadding",pc) pp.PaddingTop=UDim.new(0,4) pp.PaddingBottom=UDim.new(0,4) pp.PaddingLeft=UDim.new(0,4) pp.PaddingRight=UDim.new(0,4)
+    Instance.new("UIListLayout",pc).Padding=UDim.new(0,2)
+
+    local function updPrimHeader()
+        local sel = S.primaryTool ~= "" and S.primaryTool or "nessuno"
+        ph.Text = (primOpen and "▼ " or "▶ ") .. "🗡 M1 Weapon: " .. sel
+        primaryLabel.Text = "✓ Primary: " .. sel
+    end
+
+    local function buildPrimList()
+        for _,ch in pairs(pc:GetChildren()) do if ch:IsA("TextButton") then ch:Destroy() end end
+        for _,t in ipairs(allTools) do
+            local isSel = (S.primaryTool == t.Name)
+            local b = Instance.new("TextButton",pc)
+            b.Text = (isSel and "✓ " or "   ") .. t.Name
+            b.Size=UDim2.new(1,0,0,22) b.BackgroundColor3=isSel and C.green or C.panel
+            b.TextColor3=C.text b.TextSize=11 b.Font=Enum.Font.GothamBold b.BorderSizePixel=0
+            Instance.new("UICorner",b).CornerRadius=UDim.new(0,4)
+            b.MouseButton1Click:Connect(function()
+                S.primaryTool = t.Name
+                equipPrimary()
+                buildPrimList()
+                updPrimHeader()
+            end)
+        end
+    end
+
+    buildPrimList()
+    updPrimHeader()
+
+    ph.MouseButton1Click:Connect(function()
+        primOpen = not primOpen
+        pc.Visible = primOpen
+        updPrimHeader()
+    end)
+
+    primaryDropdown = {wrapper=pw}
+
+    -- MAGIC: dropdown collassabile con checkbox
+    local magicItems = {}
+    for _,t in ipairs(allTools) do
+        if S.useMagic[t.Name]==nil then S.useMagic[t.Name]=false end
+        table.insert(magicItems, {name=t.Name})
+    end
+
+    -- remove old magic dropdown if exists
+    if _magicDropdown then _magicDropdown.wrapper:Destroy() end
+    _magicDropdown = makeDropdown(fp, "✨ Magic Skills", magicItems, S.useMagic)
+end
+
+local _magicDropdown
+
+btn(fp,"🔄 Refresh Tools & Skills",C.accent,function() scanAllTools() end)
+task.defer(scanAllTools)
+
+makeSlider(fp,"Magic ogni (sec)",1,10,3,function(v) S.magicInterval=v end)
+
+sec(fp,"SETTINGS")
+makeSlider(fp,"Fly Speed",30,400,120,function(v) S.flySpeed=v end)
+makeSlider(fp,"Altezza dal mob",0,30,5,function(v) S.mobHeight=v end)
+makeSlider(fp,"Attack Range",5,60,16,function(v) S.atkRange=v end)
+makeSlider(fp,"Attack Speed (ms)",50,500,250,function(v) S.atkSpeed=v/1000 end)
+makeSlider(fp,"Hitbox Expand (x)",1,20,5,function(v) S.hitboxMult=v end)
+
+sec(fp,"MOB & BOSS")
+
+local mobDropdown, bossDropdown
+
+local function scanMobs()
+    local mf=workspace:FindFirstChild("Mobs") if not mf then return end
+    local knownBosses={Dragon=true,Hiei=true,Kaze=true,RougePaladin=true,Elsa=true,["Boar King"]=true,Regulus=true}
+    local mobC,bossC,mobHP2,bossHP2={},{},{},{}
+    for _,m in pairs(mf:GetChildren()) do
+        if not mobAlive(m) then continue end
+        local base=mobBase(m.Name) local mhp=mobMaxHP(m)
+        if knownBosses[base] or knownBosses[m.Name] then
+            local bn=knownBosses[base] and base or m.Name
+            bossC[bn]=(bossC[bn] or 0)+1 bossHP2[bn]=mhp
+        else
+            mobC[base]=(mobC[base] or 0)+1 mobHP2[base]=mhp
+        end
+    end
+    local mobItems,bossItems={},{}
+    for n,c in pairs(mobC) do
+        if S.selectedMobs[n]==nil then S.selectedMobs[n]=true end
+        table.insert(mobItems,{name=n,count=c,hp=mobHP2[n]})
+    end
+    for n,c in pairs(bossC) do
+        if S.selectedMobs[n]==nil then S.selectedMobs[n]=false end
+        table.insert(bossItems,{name=n,count=c,hp=bossHP2[n]})
+    end
+    table.sort(mobItems,function(a,b) return a.name<b.name end)
+    table.sort(bossItems,function(a,b) return a.name<b.name end)
+
+    if mobDropdown then
+        mobDropdown.refresh(mobItems)
+    else
+        mobDropdown = makeDropdown(fp, "🗡 Mob", mobItems, S.selectedMobs)
+    end
+
+    if bossDropdown then
+        bossDropdown.refresh(bossItems)
+    else
+        bossDropdown = makeDropdown(fp, "👑 Boss", bossItems, S.selectedMobs)
+    end
+
+    print("[NH] Scan: "..#mobItems.." mob, "..#bossItems.." boss")
+end
+
+btn(fp,"🔍 Refresh Mob & Boss",C.accent,function() scanMobs() end)
+task.defer(scanMobs)
+
+sec(fp,"VACUUM")
+makeToggle(fp,"🌀 Mob Vacuum (risucchio)",false,function(v) S.vacuum=v end)
+makeSlider(fp,"Vacuum Range",20,200,80,function(v) S.vacuumRange=v end)
+
+sec(fp,"OPZIONI")
+makeToggle(fp,"Auto Pickup",true,function(v) S.autoPickup=v end)
+makeToggle(fp,"Anti-AFK",true,function(v) S.antiAFK=v end)
+
+-- ═══ FISH PAGE ═══
+local fishP=tabPages["Fish"]
+sec(fishP,"AUTO FISHING")
+fishToggle=makeToggle(fishP,"🎣 Auto Fish",false,function(on)
+    S.fishOn=on
+    if on then
+        if S.afOn then S.afOn=false afToggle.setOn(false) end
+        if S.mineOn then S.mineOn=false mineToggle.setOn(false) end
+        task.spawn(function()
+            while S.fishOn and gui and gui.Parent do
+                local ok, err = pcall(fishLoop)
+                if not ok then print("[NH] FishLoop crash: "..tostring(err)) task.wait(3) else break end
+            end
+        end)
+    end
+end)
+local fishStatus=lbl(fishP,"Status: Idle")
+local fishStats=lbl(fishP,"Fish: 0")
+makeSlider(fishP,"Fly Speed",30,400,120,function(v) S.flySpeed=v end)
+
+-- ═══ MINE PAGE ═══
+local mineP=tabPages["Mine"]
+sec(mineP,"AUTO MINING")
+mineToggle=makeToggle(mineP,"⛏ Auto Mine",false,function(on)
+    S.mineOn=on
+    if on then
+        if S.afOn then S.afOn=false afToggle.setOn(false) end
+        if S.fishOn then S.fishOn=false fishToggle.setOn(false) end
+        task.spawn(function()
+            while S.mineOn and gui and gui.Parent do
+                local ok, err = pcall(mineLoop)
+                if not ok then print("[NH] MineLoop crash: "..tostring(err)) task.wait(3) else break end
+            end
+        end)
+    end
+end)
+local mineStatus=lbl(mineP,"Status: Idle")
+local mineStats=lbl(mineP,"Ores: 0")
+makeSlider(mineP,"Fly Speed",30,400,120,function(v) S.flySpeed=v end)
+sec(mineP,"MINERALI")
+local oreDropdown
+
+local function scanOres()
+    S.selectedOres={}
+    local oresF=workspace:FindFirstChild("Ores") if not oresF then return end
+    local types,seen,counts={},{},{}
+    for _,ore in pairs(oresF:GetChildren()) do
+        local base=oreBase(ore.Name) if base=="" then base=ore.Name end
+        counts[base]=(counts[base] or 0)+1 if not seen[base] then seen[base]=true table.insert(types,base) end
+    end
+    table.sort(types)
+    local items={} for _,ot in ipairs(types) do S.selectedOres[ot]=true table.insert(items,{name=ot,count=counts[ot]}) end
+
+    if oreDropdown then
+        oreDropdown.refresh(items)
+    else
+        oreDropdown = makeDropdown(mineP, "⛏ Minerali", items, S.selectedOres)
+    end
+end
+
+btn(mineP,"🔍 Refresh Minerali",C.accent,function() scanOres() end)
+task.defer(scanOres)
+
+-- ═══ PLAYER PAGE ═══
+local playerP=tabPages["Player"]
+sec(playerP,"MOVIMENTO")
+makeToggle(playerP,"✈ Fly (WASD+Space)",false,function(v) S.flyOn=v end)
+makeToggle(playerP,"👻 Noclip",false,function(v) S.noclip=v end)
+makeSlider(playerP,"Fly Speed",30,400,120,function(v) S.flySpeed=v end)
+sec(playerP,"TOOLS")
+local function refreshTools()
+    for _,ch in pairs(playerP:GetChildren()) do if ch:IsA("TextButton") and ch.Name and ch.Name:find("TL_") then ch:Destroy() end end
+    local c=chr() local eq=c and c:FindFirstChildOfClass("Tool")
+    if eq then local b=btn(playerP,"✓ "..eq.Name,C.green) b.Name="TL_"..eq.Name end
+    local bp=plr:FindFirstChild("Backpack")
+    if bp then for _,t in pairs(bp:GetChildren()) do if t:IsA("Tool") then
+        local b=btn(playerP,t.Name,C.panel,function() local h=humf() if h then h:EquipTool(t) end task.wait(0.3) refreshTools() end)
+        b.Name="TL_"..t.Name
+    end end end
+end
+btn(playerP,"🔄 Refresh Tools",C.accent,function() refreshTools() end)
+task.defer(refreshTools)
+
+-- ═══ FIND MOB ═══
+local function findMob()
+    local mf=workspace:FindFirstChild("Mobs") if not mf then return nil,math.huge end
+    local r=hrpf() if not r then return nil,math.huge end
+    local my=r.Position local best,bestD=nil,math.huge
+    for _,m in pairs(mf:GetChildren()) do
+        local base=mobBase(m.Name)
+        if not S.selectedMobs[base] and not S.selectedMobs[m.Name] then continue end
+        if not mobAlive(m) then continue end
+        local p=mobPos(m) if not p then continue end
+        local d=(my-p).Magnitude if d>3000 then continue end
+        if d<bestD then best,bestD=m,d end
+    end
+    return best,bestD
+end
+
+-- ═══ ATTACK (con slots) ═══
+local lastMagicTime = 0
+
+local VIM = pcall(function() return game:GetService("VirtualInputManager") end) and game:GetService("VirtualInputManager") or nil
+
+local function doM1Attack()
+    local c=plr.Character if not c then return end
+    local tool=c:FindFirstChildOfClass("Tool")
+    if tool then pcall(function() tool:Activate() end) end
+
+    -- VirtualInputManager: click nel gioco senza toccare il mouse reale
+    if VIM then
+        pcall(function()
+            local cam = workspace.CurrentCamera
+            local cx = cam.ViewportSize.X / 2
+            local cy = cam.ViewportSize.Y / 2
+            VIM:SendMouseButtonEvent(cx, cy, 0, true, game, 1)
+            task.wait(0.015)
+            VIM:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
+        end)
+    end
+end
+
+local function doMagicCycle()
+    -- usa ogni magic skill selezionata, poi torna al weapon
+    local c=plr.Character if not c then return end
+    local h=c:FindFirstChildOfClass("Humanoid") if not h then return end
+
+    for skillName, enabled in pairs(S.useMagic) do
+        if not enabled then continue end
+        if not S.afOn then return end
+        if not alive() then return end
+
+        -- cerca lo skill
+        local bp=plr:FindFirstChild("Backpack")
+        local tool = nil
+        if bp then tool = bp:FindFirstChild(skillName) end
+        -- potrebbe essere nel character (equipaggiato)
+        if not tool then tool = c:FindFirstChild(skillName) end
+
+        if tool and tool:IsA("Tool") then
+            -- equip e attiva
+            h:EquipTool(tool)
+            task.wait(0.15)
+            pcall(function() tool:Activate() end)
+            task.wait(0.3)
+        end
+    end
+
+    -- torna al primary tool
+    task.wait(0.1)
+    equipPrimary()
+end
+
+local function doAttack()
+    -- assicura primary tool equipaggiato
+    local c = plr.Character
+    if not c then return end
+    local curTool = c:FindFirstChildOfClass("Tool")
+    if not curTool or (S.primaryTool ~= "" and curTool.Name ~= S.primaryTool) then
+        equipPrimary()
+        task.wait(0.1)
+    end
+
+    -- M1 attack
+    doM1Attack()
+
+    -- magic cycle periodico
+    if tick()-lastMagicTime > S.magicInterval then
+        local hasAnyMagic = false
+        for _,v in pairs(S.useMagic) do if v then hasAnyMagic=true break end end
+        if hasAnyMagic then
+            doMagicCycle()
+            lastMagicTime = tick()
+        end
+    end
+end
+
+-- ═══ DROPS ═══
+local function pickDrops()
+    if not S.autoPickup then return end
+    local df=workspace:FindFirstChild("Drops") if not df then return end
+    local pu=remotes and remotes:FindFirstChild("PickUp")
+    local od=remotes and remotes:FindFirstChild("ObtainDrop")
+    for _,drop in pairs(df:GetChildren()) do
+        if not alive() then break end
+        local act=drop:FindFirstChild("active") if act and not act.Value then continue end
+        local dx,dy,dz=drop:FindFirstChild("x"),drop:FindFirstChild("y"),drop:FindFirstChild("z")
+        if dx and dy and dz then
+            local dpos=Vector3.new(dx.Value,dy.Value+3,dz.Value)
+            local r=hrpf()
+            if r and (r.Position-dpos).Magnitude<300 then
+                local arr,t0=false,tick()
+                while not arr and (tick()-t0)<3 and alive() and gui.Parent do
+                    ensureFly() arr=flyTo(dpos) task.wait(0.05)
+                end
+                if pu then pcall(function() pu:FireServer(drop) end) end
+                if od then pcall(function() od:FireServer(drop) end) end
+                pcall(function() local td=drop:FindFirstChild("TheDrop")
+                    if td then for _,p in pairs(td:GetDescendants()) do if p:IsA("BasePart") then
+                        firetouchinterest(hrpf(),p,0) task.wait(0.05) firetouchinterest(hrpf(),p,1) break
+                    end end end end)
+                S.drops=S.drops+1 task.wait(0.1)
+            end
+        end
+    end
+end
+
+-- ═══ FLY UP (evita terreno) ═══
+local function flyUp(height)
+    height = height or 50
+    if not ensureFly() then return end
+    local r = hrpf()
+    if not r then return end
+    local targetY = r.Position.Y + height
+    S.status = "↑ Decollo..."
+    print("[NH] Decollo +" .. height .. " studs")
+    local t0 = tick()
+    while (tick()-t0) < 4 and gui and gui.Parent do
+        r = hrpf()
+        if not r then break end
+        if r.Position.Y >= targetY - 3 then break end
+        ensureFly()
+        if flyBV then flyBV.Velocity = Vector3.new(0, S.flySpeed, 0) end
+        task.wait(0.05)
+    end
+    if flyBV then flyBV.Velocity = Vector3.zero end
+    print("[NH] In quota! Y=" .. math.floor(hrpf() and hrpf().Position.Y or 0))
+end
+
+-- ═══ FARM LOOP (ULTRA ROBUSTO) ═══
+function farmLoop()
+    S.startTime=tick() S.kills=0 S.drops=0 lastMagicTime=0
+    print("[NH] ⚡ Farm ON")
+
+    -- DECOLLO INIZIALE
+    S.noclip = true -- noclip auto ON
+    flyUp(50)
+    equipAnyTool()
+
+    -- ANTI-STUCK failsafe
+    local lastPos = Vector3.zero
+    local stuckTime = 0
+
+    while S.afOn and gui and gui.Parent do
+        -- STEP 1: assicura di essere vivo
+        local ok1, err1 = pcall(function()
+            if not alive() then
+                S.status="💀 Morto... respawn"
+                print("[NH] Morto! Aspetto respawn...")
+                local respawned = waitForRespawn(20)
+                if not respawned then
+                    print("[NH] Respawn fallito, riprovo...")
+                    return -- riprova nel prossimo ciclo
+                end
+                -- RICREA FLY dopo respawn
+                task.wait(1)
+                ensureFly()
+                flyUp(50)
+                -- RIEQUIP tool
+                equipAnyTool()
+                S.status="✓ Ripreso!"
+                print("[NH] Ripreso dopo morte!")
+                task.wait(0.5)
+            end
+        end)
+
+        if not ok1 then print("[NH] Errore step1: "..tostring(err1)) task.wait(1) continue end
+        if not alive() then task.wait(0.5) continue end
+        if not S.afOn then break end
+
+        -- STEP 2: fly
+        local ok2, err2 = pcall(function() ensureFly() end)
+        if not ok2 then print("[NH] Errore fly: "..tostring(err2)) task.wait(1) continue end
+
+        -- STEP 3: trova mob
+        local mob, dist
+        local ok3, err3 = pcall(function() mob, dist = findMob() end)
+        if not ok3 then print("[NH] Errore find: "..tostring(err3)) task.wait(1) continue end
+
+        if mob then
+            local mhp = mobMaxHP(mob)
+
+            -- STEP 4: combatti
+            while S.afOn and gui and gui.Parent do
+                local ok4, err4 = pcall(function()
+                    -- check morte durante fight
+                    if not alive() then
+                        S.status="💀 Morto in fight..."
+                        error("DEAD") -- esce dal pcall, torna al loop principale
+                    end
+
+                    if not mobAlive(mob) then error("MOB_DEAD") end
+                    ensureFly() -- SEMPRE ricrea fly se necessario
+                    expandHitbox(mob) -- ingrandisci hitbox
+                    vacuumMobs() -- risucchia mob vicini
+
+                    -- ANTI-STUCK: detecta se fermo per 3 sec
+                    local r=hrpf() if not r then error("NO_HRP") end
+                    local curPos = r.Position
+                    if (curPos - lastPos).Magnitude < 2 then
+                        if stuckTime == 0 then
+                            stuckTime = tick()
+                        elseif tick() - stuckTime > 3 then
+                            -- STUCK! tp in alto
+                            print("[NH] ⚠ STUCK! TP up")
+                            S.status = "⚠ Stuck → TP"
+                            pcall(function()
+                                r.CFrame = r.CFrame + Vector3.new(0, 50, 0)
+                            end)
+                            flyUp(30)
+                            stuckTime = 0
+                        end
+                    else
+                        stuckTime = 0
+                    end
+                    lastPos = curPos
+
+                    local curMP=mobPos(mob) if not curMP then error("NO_POS") end
+                    local d=(r.Position-curMP).Magnitude
+                    local targetP=curMP+Vector3.new(0,S.mobHeight,0)
+
+                    if d>S.atkRange then
+                        flyTo(targetP)
+                        S.status=mob.Name.." → "..math.floor(d).."m"
+                    else
+                        flyStop()
+                        pcall(function() r.CFrame=CFrame.new(r.Position,curMP) end)
+                        if flyBG then pcall(function() flyBG.CFrame=CFrame.new(r.Position,curMP) end) end
+                        doAttack()
+                        S.status="⚔ "..mob.Name.." ["..mobHP(mob).."/"..mhp.."]"
+                    end
+                end)
+
+                if not ok4 then
+                    if err4=="DEAD" then break end
+                    if err4=="MOB_DEAD" or err4=="NO_POS" or err4=="NO_HRP" then break end
+                    print("[NH] Fight err: "..tostring(err4))
+                    break
+                end
+
+                task.wait(S.atkSpeed)
+            end
+
+            -- mob morto?
+            pcall(function()
+                if mob and (not mob.Parent or mobHP(mob)<=0) then S.kills=S.kills+1 end
+            end)
+
+            task.wait(0.3)
+            if alive() then pcall(pickDrops) end
+        else
+            S.status="Cerco mob..."
+            vacuumMobs()
+            if alive() then pcall(pickDrops) end
+            task.wait(1)
+        end
+        task.wait(0.05)
+    end
+
+    stopFly() S.status="Idle"
+    print("[NH] Farm OFF | K:"..S.kills.." D:"..S.drops)
+end
+
+-- ═══ FISH LOOP ═══
+function fishLoop()
+    S.fish=0
+    local sfr=remotes and remotes:FindFirstChild("StartFishingSpot")
+    print("[NH] 🎣 Fish ON")
+    flyUp(50)
+    while S.fishOn and gui and gui.Parent do
+        if not alive() then fishStatus.Text="Morto..." waitForRespawn(20) task.wait(1) ensureFly() flyUp(50) continue end
+        ensureFly()
+        local best,bestD=nil,math.huge local r=hrpf()
+        if r then local fs=workspace:FindFirstChild("FishingSpawns")
+            if fs then for _,s in pairs(fs:GetDescendants()) do if s:IsA("BasePart") then
+                local d=(r.Position-s.Position).Magnitude if d<bestD then best,bestD=s,d end
+            end end end
+        end
+        if best then
+            fishStatus.Text="Volo → "..math.floor(bestD).."m"
+            local arr=false
+            while S.fishOn and alive() and not arr and gui.Parent do ensureFly() arr=flyTo(best.Position+Vector3.new(0,3,0)) task.wait(0.05) end
+            if arr and S.fishOn then flyStop() fishStatus.Text="Pesco..."
+                if sfr then pcall(function() sfr:FireServer(best) end) end
+                pcall(function() local pp=best:FindFirstChildOfClass("ProximityPrompt") if pp then fireproximityprompt(pp) end end)
+                pcall(function() firetouchinterest(hrpf(),best,0) task.wait(0.1) firetouchinterest(hrpf(),best,1) end)
+                S.fish=S.fish+1 fishStats.Text="Fish: "..S.fish task.wait(5)
+            end
+        else fishStatus.Text="No spot..." task.wait(2) end
+        task.wait(0.1)
+    end
+    stopFly() fishStatus.Text="Idle"
+end
+
+-- ═══ MINE LOOP ═══
+function mineLoop()
+    S.ores=0
+    local hitOre=remotes and remotes:FindFirstChild("HitOre")
+    local mineChunk=remotes and remotes:FindFirstChild("MineChunk")
+    print("[NH] ⛏ Mine ON")
+    flyUp(50)
+    while S.mineOn and gui and gui.Parent do
+        if not alive() then mineStatus.Text="Morto..." waitForRespawn(20) task.wait(1) ensureFly() flyUp(50) continue end
+        ensureFly()
+        local best,bestD=nil,math.huge local r=hrpf()
+        if r then local oresF=workspace:FindFirstChild("Ores")
+            if oresF then for _,ore in pairs(oresF:GetChildren()) do
+                local base=oreBase(ore.Name) if base=="" then base=ore.Name end
+                if not S.selectedOres[base] then continue end
+                local op=nil
+                if ore:IsA("BasePart") then op=ore.Position
+                else for _,p in pairs(ore:GetDescendants()) do if p:IsA("BasePart") then op=p.Position break end end end
+                if op then local d=(r.Position-op).Magnitude if d<bestD then best,bestD=ore,d end end
+            end end
+        end
+        if best then
+            local op=nil
+            if best:IsA("BasePart") then op=best.Position
+            else for _,p in pairs(best:GetDescendants()) do if p:IsA("BasePart") then op=p.Position break end end end
+            if op then
+                mineStatus.Text=best.Name.." → "..math.floor(bestD).."m"
+                local arr=false
+                while S.mineOn and alive() and not arr and gui.Parent do ensureFly() arr=flyTo(op+Vector3.new(0,3,0)) task.wait(0.05) end
+                if arr and S.mineOn then flyStop() mineStatus.Text="Mining "..best.Name
+                    for i=1,20 do
+                        if not S.mineOn or not gui.Parent or not best.Parent or not alive() then break end
+                        if hitOre then pcall(function() hitOre:FireServer(best) end) end
+                        if mineChunk then pcall(function() mineChunk:FireServer(best) end) end
+                        pcall(function() local c=chr() local t=c and c:FindFirstChildOfClass("Tool") if t then t:Activate() end end)
+                        task.wait(0.5)
+                    end
+                    S.ores=S.ores+1 mineStats.Text="Ores: "..S.ores
+                end
+            end
+        else mineStatus.Text="No ore..." task.wait(2) end
+        task.wait(0.1)
+    end
+    stopFly() mineStatus.Text="Idle"
+end
+
+-- ═══ RESPAWN HANDLER ═══
+plr.CharacterAdded:Connect(function(newChar)
+    print("[NH] CharacterAdded!")
+    task.wait(2)
+    -- wait for humanoid
+    local h = newChar:WaitForChild("Humanoid", 10)
+    local r = newChar:WaitForChild("HumanoidRootPart", 10)
+    if h and r then
+        print("[NH] Character pronto! HP:"..h.Health)
+        if S.afOn or S.fishOn or S.mineOn then
+            task.wait(1)
+            ensureFly()
+            flyUp(50)
+            equipAnyTool()
+        end
+    end
+end)
+
+-- anti afk
+task.spawn(function() while gui and gui.Parent do
+    if S.antiAFK then pcall(function() game:GetService("VirtualUser"):CaptureController() game:GetService("VirtualUser"):ClickButton2(Vector2.new()) end) end
+    task.wait(60)
+end end)
+
+-- ui update
+task.spawn(function() while gui and gui.Parent do
+    if S.afOn then statusLbl.Text="Status: "..S.status statsLbl.Text="Kills: "..S.kills.." | Drops: "..S.drops.." | "..elapsed() end
+    task.wait(0.5)
+end end)
+
+print("══════════════════════════════════")
+print("  ⚡ NICOLA HUB v5.0 loaded!")
+print("  Right Shift = toggle GUI")
+print("══════════════════════════════════")

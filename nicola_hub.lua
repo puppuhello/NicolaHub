@@ -1646,100 +1646,150 @@ function fishLoop()
         return false
     end
 
-    -- === HELPER: trova boat spawner/NPC/prompt ===
-    local function findBoatInteraction()
-        local r = hrpf()
-        if not r then return nil, nil, math.huge end
+    -- === HELPER: spawna barca dal menu inventario ===
+    local function spawnBoatFromMenu()
+        fishStatus.Text="🚤 Spawno barca..."
+        print("[NH] 🚤 Cerco barca nel menu...")
 
-        local bestPrompt, bestPart, bestDist = nil, nil, math.huge
-
-        -- cerca in tutto workspace cose con "boat" nel nome
-        local searchFolders = {}
-        for _,name in ipairs({"Boats","BoatSpawns","BoatSpawner","Dock","Docks","Harbor","Port","Ships","NPCs","Interactables"}) do
-            local f = workspace:FindFirstChild(name)
-            if f then table.insert(searchFolders, f) end
-        end
-        -- cerca anche folder con boat/dock nel nome
-        for _,ch in pairs(workspace:GetChildren()) do
-            if (ch.Name:lower():find("boat") or ch.Name:lower():find("dock") or ch.Name:lower():find("harbor") or ch.Name:lower():find("ship") or ch.Name:lower():find("port")) then
-                table.insert(searchFolders, ch)
-            end
-        end
-
-        -- cerca proximity prompts e click detectors relativi a barche
-        local function scanForPrompts(folder)
-            for _,obj in pairs(folder:GetDescendants()) do
-                if obj:IsA("ProximityPrompt") then
-                    local parent = obj.Parent
-                    if parent and parent:IsA("BasePart") then
-                        local d = (r.Position - parent.Position).Magnitude
-                        if d < bestDist then
-                            bestPrompt = obj
-                            bestPart = parent
-                            bestDist = d
-                        end
-                    end
-                elseif obj:IsA("ClickDetector") then
-                    local parent = obj.Parent
-                    if parent and parent:IsA("BasePart") then
-                        local d = (r.Position - parent.Position).Magnitude
-                        if d < bestDist then
-                            bestPrompt = obj
-                            bestPart = parent
-                            bestDist = d
-                        end
-                    end
-                end
-            end
-        end
-
-        for _,folder in ipairs(searchFolders) do
-            scanForPrompts(folder)
-        end
-
-        -- se non trovato in folder specifiche, cerca TUTTI i prompt con boat/ship/sail nel testo
-        if not bestPrompt then
-            for _,obj in pairs(workspace:GetDescendants()) do
-                if obj:IsA("ProximityPrompt") then
-                    local txt = (obj.ActionText or ""):lower() .. (obj.ObjectText or ""):lower()
-                    if txt:find("boat") or txt:find("sail") or txt:find("ship") or txt:find("barca") or txt:find("spawn") then
-                        local parent = obj.Parent
-                        if parent and parent:IsA("BasePart") then
-                            local d = (r.Position - parent.Position).Magnitude
-                            if d < bestDist then
-                                bestPrompt = obj
-                                bestPart = parent
-                                bestDist = d
+        -- METODO 1: cerca bottoni "Boats" nella PlayerGui e clicca la prima barca
+        pcall(function()
+            local pg = plr:FindFirstChild("PlayerGui")
+            if not pg then return end
+            for _,gui in pairs(pg:GetDescendants()) do
+                -- cerca bottoni con "boat" nel testo o nel nome
+                if (gui:IsA("TextButton") or gui:IsA("ImageButton")) then
+                    local txt = ""
+                    if gui:IsA("TextButton") then txt = (gui.Text or ""):lower() end
+                    local nm = gui.Name:lower()
+                    if nm:find("boat") or nm:find("fishing boat") or txt:find("boat") or txt:find("fishing boat") then
+                        print("[NH] 🚤 Trovato bottone barca: "..gui.Name.." ("..gui:GetFullName()..")")
+                        -- prima click sul tab Boats se esiste
+                        local parent = gui.Parent
+                        while parent and parent ~= pg do
+                            for _,sibling in pairs(parent:GetChildren()) do
+                                if (sibling:IsA("TextButton") or sibling:IsA("ImageButton")) then
+                                    local stxt = sibling:IsA("TextButton") and (sibling.Text or ""):lower() or ""
+                                    if stxt == "boats" or sibling.Name:lower() == "boats" then
+                                        pcall(function() fireclick(sibling) end)
+                                        pcall(function() sibling.MouseButton1Click:Fire() end) -- try
+                                        task.wait(0.3)
+                                    end
+                                end
                             end
+                            parent = parent.Parent
+                        end
+                        -- click sulla barca
+                        pcall(function() fireclick(gui) end)
+                        task.wait(0.5)
+                    end
+                end
+            end
+        end)
+
+        -- METODO 2: cerca RemoteEvents per spawnare barca
+        pcall(function()
+            local rs = game:GetService("ReplicatedStorage")
+            for _,r in pairs(rs:GetDescendants()) do
+                if r:IsA("RemoteEvent") or r:IsA("RemoteFunction") then
+                    local nm = r.Name:lower()
+                    if nm:find("boat") or nm:find("spawn") and nm:find("boat") then
+                        print("[NH] 🚤 Trovato boat remote: "..r:GetFullName())
+                        if r:IsA("RemoteEvent") then
+                            pcall(function() r:FireServer("Fishing Boat") end)
+                            pcall(function() r:FireServer("FishingBoat") end)
+                            pcall(function() r:FireServer(1) end)
+                            pcall(function() r:FireServer() end)
+                        elseif r:IsA("RemoteFunction") then
+                            pcall(function() r:InvokeServer("Fishing Boat") end)
+                            pcall(function() r:InvokeServer() end)
                         end
                     end
                 end
             end
-        end
+        end)
 
-        return bestPrompt, bestPart, bestDist
+        task.wait(1)
     end
 
-    -- === HELPER: check se il player è su una barca ===
+    -- === HELPER: trova la barca del player nel workspace ===
+    local function findMyBoat()
+        -- cerca modelli con "boat" nel nome che appartengono al player
+        for _,obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("Model") and (obj.Name:lower():find("boat") or obj.Name:lower():find("ship")) then
+                -- check se appartiene al player (nome contiene username o ha un Value con playerName)
+                if obj.Name:find(plr.Name) or obj.Name:find(plr.UserId) then
+                    print("[NH] 🚤 Trovata MIA barca (nome): "..obj:GetFullName())
+                    return obj
+                end
+                -- check attributi
+                for _,v in pairs(obj:GetChildren()) do
+                    if v:IsA("ObjectValue") and v.Value == plr then
+                        print("[NH] 🚤 Trovata MIA barca (ObjectValue): "..obj:GetFullName())
+                        return obj
+                    end
+                    if v:IsA("StringValue") and (v.Value == plr.Name or v.Value == tostring(plr.UserId)) then
+                        print("[NH] 🚤 Trovata MIA barca (StringValue): "..obj:GetFullName())
+                        return obj
+                    end
+                end
+            end
+        end
+
+        -- fallback: trova la barca più vicina al player
+        local r = hrpf()
+        if not r then return nil end
+        local best, bestD = nil, math.huge
+        for _,obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("Model") and (obj.Name:lower():find("boat") or obj.Name:lower():find("ship")) then
+                local pp = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChildWhichIsA("BasePart")
+                if pp then
+                    local d = (r.Position - pp.Position).Magnitude
+                    if d < bestD then best, bestD = obj, d end
+                end
+            end
+        end
+        if best then print("[NH] 🚤 Trovata barca vicina: "..best:GetFullName().." ("..math.floor(bestD).."m)") end
+        return best
+    end
+
+    -- === HELPER: muovi la barca insieme al player ===
+    local function moveBoatTo(boat, targetPos)
+        if not boat or not boat.Parent then return end
+        pcall(function()
+            local boatPrimary = boat.PrimaryPart or boat:FindFirstChildWhichIsA("BasePart")
+            if not boatPrimary then return end
+            -- metti la barca sotto il player (sulla superficie dell'acqua)
+            local boatTarget = CFrame.new(targetPos.X, targetPos.Y - 5, targetPos.Z)
+            if boat.PrimaryPart then
+                boat:SetPrimaryPartCFrame(boatTarget)
+            else
+                boatPrimary.CFrame = boatTarget
+            end
+        end)
+    end
+
+    -- === HELPER: check se il player ha una barca spawnata ===
     local function isOnBoat()
         local c = plr.Character
         if not c then return false end
-        -- controlla se il character è dentro/sopra un modello "boat"
         local r = hrpf()
         if not r then return false end
-        -- raycast giù per vedere se siamo su una barca
+        -- raycast giù
         local ray = workspace:Raycast(r.Position, Vector3.new(0,-20,0))
         if ray and ray.Instance then
             local name = ray.Instance.Name:lower()
-            local parentName = ray.Instance.Parent and ray.Instance.Parent.Name:lower() or ""
+            local pn = ray.Instance.Parent and ray.Instance.Parent.Name:lower() or ""
             if name:find("boat") or name:find("ship") or name:find("plank") or name:find("deck") or
-               parentName:find("boat") or parentName:find("ship") then
-                return true
-            end
+               pn:find("boat") or pn:find("ship") then return true end
         end
-        -- check se seated (SeatPart)
         local hum = c:FindFirstChildOfClass("Humanoid")
         if hum and hum.SeatPart then return true end
+        -- check se c'è una barca vicina (< 30m)
+        local myBoat = findMyBoat()
+        if myBoat then
+            local bp = myBoat.PrimaryPart or myBoat:FindFirstChildWhichIsA("BasePart")
+            if bp and (r.Position - bp.Position).Magnitude < 30 then return true end
+        end
         return false
     end
 
@@ -1851,57 +1901,21 @@ function fishLoop()
             continue
         end
 
-        -- STEP 2: trova e prendi la barca
-        if not isOnBoat() then
-            fishStatus.Text="🚤 Cerco barca..."
-            local prompt, part, dist = findBoatInteraction()
-
-            if prompt and part then
-                fishStatus.Text="🚤 Volo alla barca → "..math.floor(dist).."m"
-                ensureFly()
-
-                -- vola alla barca
-                local arr = false
-                while S.fishOn and alive() and not arr and gui.Parent do
-                    ensureFly()
-                    arr = flyTo(part.Position + Vector3.new(0,3,0))
-                    task.wait(0.05)
-                end
-
-                if arr and S.fishOn then
-                    flyStop()
-                    task.wait(0.3)
-                    fishStatus.Text="🚤 Prendo barca..."
-
-                    -- interagisci con la barca
-                    if prompt:IsA("ProximityPrompt") then
-                        pcall(function() fireproximityprompt(prompt) end)
-                    elseif prompt:IsA("ClickDetector") then
-                        pcall(function() fireclickdetector(prompt) end)
-                    end
-
-                    -- ri-equipa tool dopo barca
-                    task.wait(1)
-                    equipFishTool()
-                    task.wait(1)
-
-                    -- check se adesso siamo sulla barca
-                    if isOnBoat() then
-                        print("[NH] 🚤 Su barca!")
-                    else
-                        print("[NH] ⚠ Barca non presa, riprovo...")
-                        task.wait(2)
-                        continue
-                    end
-                end
+        -- STEP 2: spawna/trova la barca
+        local myBoat = findMyBoat()
+        if not myBoat then
+            fishStatus.Text="🚤 Spawno barca dal menu..."
+            spawnBoatFromMenu()
+            task.wait(2)
+            myBoat = findMyBoat()
+            if myBoat then
+                print("[NH] 🚤 Barca spawnata!")
             else
-                fishStatus.Text="⚠ No barca trovata"
-                print("[NH] ⚠ Nessuna barca/prompt trovata in workspace")
-                -- prova a pescare comunque
+                print("[NH] ⚠ Barca non trovata dopo spawn. Pesco senza barca...")
             end
         end
 
-        -- STEP 3: vai al fish spot e pesca
+        -- STEP 3: vai al fish spot e porta la barca
         local spot, spotDist = findFishSpot()
         if spot then
             fishStatus.Text="🎣 Volo al spot → "..math.floor(spotDist).."m"
@@ -1911,6 +1925,10 @@ function fishLoop()
             while S.fishOn and alive() and not arr and gui.Parent do
                 ensureFly()
                 arr = flyTo(spot.Position + Vector3.new(0,3,0))
+                -- muovi la barca insieme al player
+                if myBoat and myBoat.Parent then
+                    moveBoatTo(myBoat, spot.Position)
+                end
                 task.wait(0.05)
             end
 
@@ -1918,11 +1936,10 @@ function fishLoop()
                 flyStop()
                 fishStatus.Text="🎣 Pesco..."
 
-                -- assicura fishing tool equipaggiato
-                equipFishTool()
-                task.wait(0.2)
-
-                -- pesca!
+                -- posiziona barca sotto lo spot
+                if myBoat and myBoat.Parent then
+                    moveBoatTo(myBoat, spot.Position)
+                end
                 doFish(spot)
 
                 S.fish = S.fish + 1

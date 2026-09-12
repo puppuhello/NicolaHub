@@ -35,6 +35,7 @@ local S = {
     status="Idle", startTime=0,
     selectedMobs={}, selectedOres={},
     primaryTool="",
+    fishTool="",
     useWeapon=true, useBlessing=false,
     useMagic={},
 }
@@ -58,6 +59,7 @@ local function saveConfig()
             antiAFK = S.antiAFK,
             noclip = S.noclip,
             primaryTool = S.primaryTool,
+            fishTool = S.fishTool,
             selectedMobs = S.selectedMobs,
             selectedOres = S.selectedOres,
             useMagic = S.useMagic,
@@ -84,6 +86,7 @@ local function loadConfig()
         if cfg.antiAFK ~= nil then S.antiAFK = cfg.antiAFK end
         if cfg.noclip ~= nil then S.noclip = cfg.noclip end
         if cfg.primaryTool then S.primaryTool = cfg.primaryTool end
+        if cfg.fishTool then S.fishTool = cfg.fishTool end
         if cfg.selectedMobs then S.selectedMobs = cfg.selectedMobs end
         if cfg.selectedOres then S.selectedOres = cfg.selectedOres end
         if cfg.useMagic then S.useMagic = cfg.useMagic end
@@ -1016,10 +1019,82 @@ fishToggle=makeToggle(fishP,"Auto Fish",false,function(on)
             end
         end)
     end
-end,"Pesca automatica nei Fishing Spots.")
+end,"Pesca automatica: equipa canna, prende barca, pesca.")
 local fishStatus=lbl(fishP,"Status: Idle")
 local fishStats=lbl(fishP,"Fish: 0")
-makeSlider(fishP,"Fly Speed",30,400,120,function(v) S.flySpeed=v end)
+
+-- dropdown canna da pesca
+sec(fishP,"CANNA DA PESCA")
+local fishToolDropdown
+local fishToolLabel=lbl(fishP,"Canna: nessuna")
+
+local function scanFishTools()
+    local bp=plr:FindFirstChild("Backpack")
+    local c=plr.Character
+    local allTools={}
+    if bp then for _,t in pairs(bp:GetChildren()) do if t:IsA("Tool") then table.insert(allTools,t) end end end
+    if c then for _,t in pairs(c:GetChildren()) do if t:IsA("Tool") then table.insert(allTools,t) end end end
+
+    if fishToolDropdown then fishToolDropdown.wrapper:Destroy() fishToolDropdown=nil end
+
+    local fw = Instance.new("Frame",fishP) fw.Size=UDim2.new(1,0,0,0)
+    fw.BackgroundTransparency=1 fw.AutomaticSize=Enum.AutomaticSize.Y
+    Instance.new("UIListLayout",fw).Padding=UDim.new(0,0)
+
+    local fh=Instance.new("TextButton",fw) fh.Size=UDim2.new(1,0,0,32)
+    fh.BackgroundColor3=C.card fh.BorderSizePixel=0 fh.TextColor3=C.text fh.TextSize=13
+    fh.Font=Enum.Font.GothamBold fh.TextXAlignment=Enum.TextXAlignment.Left
+    Instance.new("UICorner",fh).CornerRadius=UDim.new(0,6)
+    Instance.new("UIPadding",fh).PaddingLeft=UDim.new(0,12)
+
+    local fishOpen = false
+    local fc = Instance.new("Frame",fw) fc.Size=UDim2.new(1,0,0,0)
+    fc.BackgroundColor3=C.dark fc.BorderSizePixel=0 fc.Visible=false
+    fc.AutomaticSize=Enum.AutomaticSize.Y
+    Instance.new("UICorner",fc).CornerRadius=UDim.new(0,6)
+    local fcp=Instance.new("UIPadding",fc) fcp.PaddingTop=UDim.new(0,4) fcp.PaddingBottom=UDim.new(0,4) fcp.PaddingLeft=UDim.new(0,6) fcp.PaddingRight=UDim.new(0,6)
+    Instance.new("UIListLayout",fc).Padding=UDim.new(0,2)
+
+    local function updFishHeader()
+        local sel = S.fishTool ~= "" and S.fishTool or "nessuna"
+        fh.Text = (fishOpen and "▼ " or "▶ ") .. "🎣 Canna: " .. sel
+        fishToolLabel.Text = "✓ Canna: " .. sel
+    end
+
+    local function buildFishList()
+        for _,ch in pairs(fc:GetChildren()) do if ch:IsA("TextButton") then ch:Destroy() end end
+        for _,t in ipairs(allTools) do
+            local isSel = (S.fishTool == t.Name)
+            local b = Instance.new("TextButton",fc)
+            b.Text = (isSel and "✓ " or "   ") .. t.Name
+            b.Size=UDim2.new(1,0,0,24) b.BackgroundColor3=isSel and C.green or C.card
+            b.TextColor3=C.text b.TextSize=11 b.Font=Enum.Font.GothamBold b.BorderSizePixel=0
+            Instance.new("UICorner",b).CornerRadius=UDim.new(0,4)
+            b.MouseButton1Click:Connect(function()
+                S.fishTool = t.Name
+                saveConfig()
+                buildFishList()
+                updFishHeader()
+            end)
+        end
+    end
+
+    buildFishList()
+    updFishHeader()
+
+    fh.MouseButton1Click:Connect(function()
+        fishOpen = not fishOpen
+        fc.Visible = fishOpen
+        updFishHeader()
+    end)
+
+    fishToolDropdown = {wrapper=fw}
+end
+
+btn(fishP,"🔄 Refresh Canne",C.green,function() scanFishTools() end)
+task.defer(scanFishTools)
+
+makeSlider(fishP,"Fly Speed",30,400,S.flySpeed,function(v) S.flySpeed=v saveConfig() end)
 
 -- ═══ MINE PAGE ═══
 mineToggle=makeToggle(mineP,"Auto Mine",false,function(on)
@@ -1476,25 +1551,35 @@ function fishLoop()
         local h = c:FindFirstChildOfClass("Humanoid")
         if not h then return false end
 
-        -- check se già equipaggiato
+        -- check se già equipaggiato quello giusto
         local cur = c:FindFirstChildOfClass("Tool")
-        if cur and (cur.Name:lower():find("fish") or cur.Name:lower():find("rod") or cur.Name:lower():find("canna") or cur.Name:lower():find("pole")) then
-            return true
+        if cur and S.fishTool ~= "" and cur.Name == S.fishTool then return true end
+
+        -- cerca la canna selezionata dall'utente
+        if S.fishTool ~= "" then
+            local bp = plr:FindFirstChild("Backpack")
+            -- nel backpack
+            if bp then
+                local t = bp:FindFirstChild(S.fishTool)
+                if t and t:IsA("Tool") then
+                    h:EquipTool(t) print("[NH] 🎣 Equipaggiato: "..t.Name) task.wait(0.3) return true
+                end
+            end
+            -- già nel character?
+            local t2 = c:FindFirstChild(S.fishTool)
+            if t2 and t2:IsA("Tool") then return true end
         end
 
-        -- cerca nel backpack
+        -- fallback: cerca per nome (fish/rod/canna/pole/harpoon)
         local bp = plr:FindFirstChild("Backpack")
         if bp then
             for _,t in pairs(bp:GetChildren()) do
-                if t:IsA("Tool") and (t.Name:lower():find("fish") or t.Name:lower():find("rod") or t.Name:lower():find("canna") or t.Name:lower():find("pole")) then
-                    h:EquipTool(t)
-                    print("[NH] 🎣 Equipaggiato: "..t.Name)
-                    task.wait(0.3)
-                    return true
+                if t:IsA("Tool") and (t.Name:lower():find("fish") or t.Name:lower():find("rod") or t.Name:lower():find("canna") or t.Name:lower():find("pole") or t.Name:lower():find("harpoon")) then
+                    h:EquipTool(t) print("[NH] 🎣 Equipaggiato (auto): "..t.Name) task.wait(0.3) return true
                 end
             end
         end
-        print("[NH] ⚠ Nessun fishing tool trovato!")
+        print("[NH] ⚠ Nessun fishing tool! Seleziona una canna nel tab Fishing.")
         return false
     end
 

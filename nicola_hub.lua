@@ -526,9 +526,8 @@ Instance.new("UIStroke",main).Color=C.border
 local hdr=Instance.new("Frame",main) hdr.Name="Header" hdr.Size=UDim2.new(1,0,0,38) hdr.BackgroundColor3=C.header hdr.BorderSizePixel=0
 local hdrBottom=Instance.new("Frame",hdr) hdrBottom.Size=UDim2.new(1,0,0,1) hdrBottom.Position=UDim2.new(0,0,1,-1) hdrBottom.BackgroundColor3=C.divider hdrBottom.BorderSizePixel=0
 
-local icon=Instance.new("ImageLabel",hdr) icon.Size=UDim2.new(0,26,0,26) icon.Position=UDim2.new(0,8,0,6)
-icon.BackgroundTransparency=1 icon.Image="https://raw.githubusercontent.com/puppuhello/NicolaHub/main/icon.png"
-icon.ScaleType=Enum.ScaleType.Crop
+local icon=Instance.new("TextLabel",hdr) icon.Text="N" icon.Size=UDim2.new(0,26,0,26) icon.Position=UDim2.new(0,8,0,6)
+icon.BackgroundColor3=C.green icon.TextColor3=Color3.new(1,1,1) icon.TextSize=16 icon.Font=Enum.Font.GothamBold
 Instance.new("UICorner",icon).CornerRadius=UDim.new(1,0)
 
 local titleLbl=Instance.new("TextLabel",hdr) titleLbl.Text="Nicola Hub" titleLbl.Size=UDim2.new(0,100,1,0) titleLbl.Position=UDim2.new(0,38,0,0)
@@ -1139,18 +1138,6 @@ local currentTarget = nil -- mob attualmente sotto attacco
 
 local VIM = pcall(function() return game:GetService("VirtualInputManager") end) and game:GetService("VirtualInputManager") or nil
 
--- punta la camera verso il mob
-local function aimAtMob(mob)
-    pcall(function()
-        local cam = workspace.CurrentCamera
-        local r = hrpf()
-        if not r then return end
-        local mp = mobPos(mob)
-        if not mp then return end
-        cam.CFrame = CFrame.new(cam.CFrame.Position, mp)
-    end)
-end
-
 -- firetouchinterest tra Handle del tool e parti del mob (100% hit)
 local function touchMob(mob)
     pcall(function()
@@ -1216,15 +1203,10 @@ local function doM1Attack()
     local c=plr.Character if not c then return end
     local tool=c:FindFirstChildOfClass("Tool")
 
-    -- 1. punta camera al mob
-    if currentTarget and currentTarget.Parent then
-        aimAtMob(currentTarget)
-    end
-
-    -- 2. tool:Activate()
+    -- 1. tool:Activate()
     if tool then pcall(function() tool:Activate() end) end
 
-    -- 3. click VIM mirato al mob
+    -- 2. click VIM mirato al mob
     if currentTarget and currentTarget.Parent then
         clickAtMob(currentTarget)
     elseif VIM then
@@ -1238,7 +1220,7 @@ local function doM1Attack()
         end)
     end
 
-    -- 4. firetouchinterest (garantisce il colpo)
+    -- 3. firetouchinterest (garantisce il colpo)
     if currentTarget and currentTarget.Parent then
         touchMob(currentTarget)
     end

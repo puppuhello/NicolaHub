@@ -39,6 +39,61 @@ local S = {
     useMagic={},
 }
 
+-- ═══ CONFIG SAVE/LOAD ═══
+local CONFIG_FILE = "NicolaHub_config.json"
+local HttpService = game:GetService("HttpService")
+
+local function saveConfig()
+    pcall(function()
+        local cfg = {
+            flySpeed = S.flySpeed,
+            atkSpeed = S.atkSpeed,
+            atkRange = S.atkRange,
+            mobHeight = S.mobHeight,
+            magicInterval = S.magicInterval,
+            hitboxMult = S.hitboxMult,
+            vacuumRange = S.vacuumRange,
+            vacuum = S.vacuum,
+            autoPickup = S.autoPickup,
+            antiAFK = S.antiAFK,
+            noclip = S.noclip,
+            primaryTool = S.primaryTool,
+            selectedMobs = S.selectedMobs,
+            selectedOres = S.selectedOres,
+            useMagic = S.useMagic,
+        }
+        writefile(CONFIG_FILE, HttpService:JSONEncode(cfg))
+        print("[NH] Config salvata!")
+    end)
+end
+
+local function loadConfig()
+    pcall(function()
+        if not isfile(CONFIG_FILE) then return end
+        local data = readfile(CONFIG_FILE)
+        local cfg = HttpService:JSONDecode(data)
+        if cfg.flySpeed then S.flySpeed = cfg.flySpeed end
+        if cfg.atkSpeed then S.atkSpeed = cfg.atkSpeed end
+        if cfg.atkRange then S.atkRange = cfg.atkRange end
+        if cfg.mobHeight then S.mobHeight = cfg.mobHeight end
+        if cfg.magicInterval then S.magicInterval = cfg.magicInterval end
+        if cfg.hitboxMult then S.hitboxMult = cfg.hitboxMult end
+        if cfg.vacuumRange then S.vacuumRange = cfg.vacuumRange end
+        if cfg.vacuum ~= nil then S.vacuum = cfg.vacuum end
+        if cfg.autoPickup ~= nil then S.autoPickup = cfg.autoPickup end
+        if cfg.antiAFK ~= nil then S.antiAFK = cfg.antiAFK end
+        if cfg.noclip ~= nil then S.noclip = cfg.noclip end
+        if cfg.primaryTool then S.primaryTool = cfg.primaryTool end
+        if cfg.selectedMobs then S.selectedMobs = cfg.selectedMobs end
+        if cfg.selectedOres then S.selectedOres = cfg.selectedOres end
+        if cfg.useMagic then S.useMagic = cfg.useMagic end
+        print("[NH] Config caricata!")
+    end)
+end
+
+-- carica config all'avvio
+loadConfig()
+
 local C = {
     bg=Color3.fromRGB(18,18,22), sidebar=Color3.fromRGB(25,25,32),
     content=Color3.fromRGB(32,32,40), header=Color3.fromRGB(20,20,26),
@@ -526,7 +581,7 @@ sidebar.BackgroundColor3=C.sidebar sidebar.BorderSizePixel=0
 local sideDiv=Instance.new("Frame",sidebar) sideDiv.Size=UDim2.new(0,1,1,0) sideDiv.Position=UDim2.new(1,0,0,0) sideDiv.BackgroundColor3=C.divider sideDiv.BorderSizePixel=0
 local sideScroll=Instance.new("ScrollingFrame",sidebar) sideScroll.Size=UDim2.new(1,0,1,0) sideScroll.BackgroundTransparency=1
 sideScroll.BorderSizePixel=0 sideScroll.ScrollBarThickness=0 sideScroll.CanvasSize=UDim2.new(0,0,0,0) sideScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
-local sLay=Instance.new("UIListLayout",sideScroll) sLay.Padding=UDim.new(0,0)
+local sLay=Instance.new("UIListLayout",sideScroll) sLay.Padding=UDim.new(0,0) sLay.SortOrder=Enum.SortOrder.LayoutOrder
 local sPad=Instance.new("UIPadding",sideScroll) sPad.PaddingTop=UDim.new(0,8)
 
 -- ═══ CONTENT AREA ═══
@@ -596,6 +651,8 @@ addCategory("MINE")
 local mineP=addTab("Mining")
 addCategory("PLAYER")
 local playerP=addTab("Player")
+addCategory("SYSTEM")
+local cfgP=addTab("Config")
 
 -- activate first tab
 switchTab("Farming")
@@ -892,11 +949,11 @@ task.defer(scanAllTools)
 makeSlider(atkP,"Magic Interval (sec)",1,10,3,function(v) S.magicInterval=v end)
 
 -- ═══ SETTINGS PAGE ═══
-makeSlider(setP,"Fly Speed",30,400,120,function(v) S.flySpeed=v end)
-makeSlider(setP,"Altezza dal mob",0,30,5,function(v) S.mobHeight=v end)
-makeSlider(setP,"Attack Range",5,60,16,function(v) S.atkRange=v end)
-makeSlider(setP,"Attack Speed (ms)",50,500,250,function(v) S.atkSpeed=v/1000 end)
-makeSlider(setP,"Hitbox Expand (x)",1,50,15,function(v) S.hitboxMult=v end)
+makeSlider(setP,"Fly Speed",30,400,S.flySpeed,function(v) S.flySpeed=v saveConfig() end)
+makeSlider(setP,"Altezza dal mob",0,30,S.mobHeight,function(v) S.mobHeight=v saveConfig() end)
+makeSlider(setP,"Attack Range",5,60,S.atkRange,function(v) S.atkRange=v saveConfig() end)
+makeSlider(setP,"Attack Speed (ms)",50,500,math.floor(S.atkSpeed*1000),function(v) S.atkSpeed=v/1000 saveConfig() end)
+makeSlider(setP,"Hitbox Expand (x)",1,50,S.hitboxMult,function(v) S.hitboxMult=v saveConfig() end)
 
 -- ═══ MOB & BOSS PAGE ═══
 
@@ -947,8 +1004,8 @@ btn(mobP,"🔍 Refresh Mob & Boss",C.green,function() scanMobs() end)
 task.defer(scanMobs)
 
 -- ═══ VACUUM PAGE ═══
-makeToggle(vacP,"Mob Vacuum",false,function(v) S.vacuum=v end,"Risucchia tutti i mob nel raggio verso di te.")
-makeSlider(vacP,"Vacuum Range",20,200,80,function(v) S.vacuumRange=v end)
+makeToggle(vacP,"Mob Vacuum",S.vacuum,function(v) S.vacuum=v saveConfig() end,"Risucchia tutti i mob nel raggio verso di te.")
+makeSlider(vacP,"Vacuum Range",20,200,S.vacuumRange,function(v) S.vacuumRange=v saveConfig() end)
 
 -- ═══ FISH PAGE ═══
 fishToggle=makeToggle(fishP,"Auto Fish",false,function(on)
@@ -1009,11 +1066,11 @@ btn(mineP,"🔍 Refresh Minerali",C.green,function() scanOres() end)
 task.defer(scanOres)
 
 -- ═══ PLAYER PAGE ═══
-makeToggle(playerP,"Auto Pickup",true,function(v) S.autoPickup=v end,"Raccoglie automaticamente i drop.")
-makeToggle(playerP,"Anti-AFK",true,function(v) S.antiAFK=v end,"Previene il kick per inattività.")
-makeToggle(playerP,"Noclip",false,function(v) S.noclip=v end,"Attraversa muri e oggetti solidi.")
+makeToggle(playerP,"Auto Pickup",S.autoPickup,function(v) S.autoPickup=v saveConfig() end,"Raccoglie automaticamente i drop.")
+makeToggle(playerP,"Anti-AFK",S.antiAFK,function(v) S.antiAFK=v saveConfig() end,"Previene il kick per inattività.")
+makeToggle(playerP,"Noclip",S.noclip,function(v) S.noclip=v saveConfig() end,"Attraversa muri e oggetti solidi.")
 makeToggle(playerP,"Fly",false,function(v) S.flyOn=v end,"Vola liberamente con WASD + Space/Shift.")
-makeSlider(playerP,"Fly Speed",30,400,120,function(v) S.flySpeed=v end)
+makeSlider(playerP,"Fly Speed",30,400,S.flySpeed,function(v) S.flySpeed=v saveConfig() end)
 sec(playerP,"TOOLS")
 local function refreshTools()
     for _,ch in pairs(playerP:GetChildren()) do if ch:IsA("TextButton") and ch.Name and ch.Name:find("TL_") then ch:Destroy() end end
@@ -1027,6 +1084,36 @@ local function refreshTools()
 end
 btn(playerP,"🔄 Refresh Tools",C.green,function() refreshTools() end)
 task.defer(refreshTools)
+
+-- ═══ CONFIG PAGE ═══
+local cfgStatus=lbl(cfgP,"Config: NicolaHub_config.json")
+btn(cfgP,"💾 Salva Config",C.green,function()
+    saveConfig()
+    cfgStatus.Text="✓ Config salvata!"
+    task.delay(2, function() cfgStatus.Text="Config: NicolaHub_config.json" end)
+end)
+btn(cfgP,"📂 Carica Config",C.card,function()
+    loadConfig()
+    cfgStatus.Text="✓ Config caricata! Riesegui lo script per applicare."
+    task.delay(3, function() cfgStatus.Text="Config: NicolaHub_config.json" end)
+end)
+btn(cfgP,"🗑 Reset Config",C.red,function()
+    pcall(function()
+        if isfile(CONFIG_FILE) then delfile(CONFIG_FILE) end
+    end)
+    cfgStatus.Text="✓ Config resettata! Riesegui lo script."
+    task.delay(3, function() cfgStatus.Text="Config: NicolaHub_config.json" end)
+end)
+lbl(cfgP,"")
+lbl(cfgP,"Le impostazioni vengono salvate")
+lbl(cfgP,"automaticamente ogni 30 secondi.")
+lbl(cfgP,"Al prossimo avvio, tutto sarà già pronto!")
+
+-- auto-save ogni 30 sec
+task.spawn(function() while gui and gui.Parent do
+    task.wait(30)
+    saveConfig()
+end end)
 
 -- ═══ FIND MOB ═══
 local function findMob()

@@ -29,7 +29,7 @@ local S = {
     afOn=false, fishOn=false, mineOn=false, flyOn=false, noclip=false,
     autoPickup=true, antiAFK=true,
     flySpeed=120, atkSpeed=0.25, atkRange=16, mobHeight=5,
-    magicInterval=3, hitboxMult=5,
+    magicInterval=3, hitboxMult=15,
     vacuum=false, vacuumRange=80,
     kills=0, drops=0, fish=0, ores=0,
     status="Idle", startTime=0,
@@ -114,6 +114,20 @@ local function shrinkHitbox(mob)
             end
         end
     end)
+end
+
+-- espandi hitbox di TUTTI i mob selezionati nella mappa
+local function expandAllMobs()
+    local mf = workspace:FindFirstChild("Mobs")
+    if not mf then return end
+    for _, m in pairs(mf:GetChildren()) do
+        if mobAlive(m) then
+            local base = mobBase(m.Name)
+            if S.selectedMobs[base] or S.selectedMobs[m.Name] then
+                expandHitbox(m)
+            end
+        end
+    end
 end
 
 -- ═══ MOB VACUUM ═══
@@ -791,7 +805,7 @@ makeSlider(fp,"Fly Speed",30,400,120,function(v) S.flySpeed=v end)
 makeSlider(fp,"Altezza dal mob",0,30,5,function(v) S.mobHeight=v end)
 makeSlider(fp,"Attack Range",5,60,16,function(v) S.atkRange=v end)
 makeSlider(fp,"Attack Speed (ms)",50,500,250,function(v) S.atkSpeed=v/1000 end)
-makeSlider(fp,"Hitbox Expand (x)",1,20,5,function(v) S.hitboxMult=v end)
+makeSlider(fp,"Hitbox Expand (x)",1,50,15,function(v) S.hitboxMult=v end)
 
 sec(fp,"MOB & BOSS")
 
@@ -1142,7 +1156,7 @@ function farmLoop()
 
                     if not mobAlive(mob) then error("MOB_DEAD") end
                     ensureFly() -- SEMPRE ricrea fly se necessario
-                    expandHitbox(mob) -- ingrandisci hitbox
+                    expandAllMobs() -- ingrandisci hitbox TUTTI i mob
                     vacuumMobs() -- risucchia mob vicini
 
                     -- ANTI-STUCK: detecta se fermo per 3 sec

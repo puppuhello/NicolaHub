@@ -40,13 +40,16 @@ local S = {
 }
 
 local C = {
-    bg=Color3.fromRGB(18,18,28), panel=Color3.fromRGB(28,28,42),
-    dark=Color3.fromRGB(12,12,18), accent=Color3.fromRGB(130,80,255),
-    green=Color3.fromRGB(50,205,100), red=Color3.fromRGB(235,60,60),
+    bg=Color3.fromRGB(18,18,22), sidebar=Color3.fromRGB(25,25,32),
+    content=Color3.fromRGB(32,32,40), header=Color3.fromRGB(20,20,26),
+    card=Color3.fromRGB(38,38,48), dark=Color3.fromRGB(14,14,18),
+    green=Color3.fromRGB(72,199,142), red=Color3.fromRGB(235,60,60),
     orange=Color3.fromRGB(255,170,40), cyan=Color3.fromRGB(40,200,220),
-    text=Color3.fromRGB(225,225,235), dim=Color3.fromRGB(120,120,145),
-    border=Color3.fromRGB(45,45,65), check=Color3.fromRGB(80,220,120),
-    uncheck=Color3.fromRGB(55,55,70),
+    text=Color3.fromRGB(230,230,235), dim=Color3.fromRGB(140,140,155),
+    border=Color3.fromRGB(45,45,55), accent=Color3.fromRGB(72,199,142),
+    toggleOff=Color3.fromRGB(55,55,65), check=Color3.fromRGB(72,199,142),
+    uncheck=Color3.fromRGB(55,55,65), panel=Color3.fromRGB(38,38,48),
+    divider=Color3.fromRGB(45,45,55), slider=Color3.fromRGB(45,45,55),
 }
 
 -- ═══ UTILS ═══
@@ -454,54 +457,150 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- ═══ GUI ═══
+-- ═══ GUI LAYOUT (Tekkit Hub style) ═══
 local gui=Instance.new("ScreenGui")
 gui.Name="NicolaHub" gui.ResetOnSpawn=false gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling gui.Parent=CoreGui
 
 local main=Instance.new("Frame",gui) main.Name="Main"
-main.Size=UDim2.new(0,360,0,480) main.Position=UDim2.new(0.5,-180,0.5,-240)
-main.BackgroundColor3=C.bg main.BorderSizePixel=0
-Instance.new("UICorner",main).CornerRadius=UDim.new(0,12)
+main.Size=UDim2.new(0,560,0,420) main.Position=UDim2.new(0.5,-280,0.5,-210)
+main.BackgroundColor3=C.bg main.BorderSizePixel=0 main.ClipsDescendants=true
+Instance.new("UICorner",main).CornerRadius=UDim.new(0,8)
 Instance.new("UIStroke",main).Color=C.border
 
--- title
-local tb=Instance.new("Frame",main) tb.Size=UDim2.new(1,0,0,36) tb.BackgroundColor3=C.dark tb.BorderSizePixel=0
-Instance.new("UICorner",tb).CornerRadius=UDim.new(0,12)
-local tbF=Instance.new("Frame",tb) tbF.Size=UDim2.new(1,0,0,12) tbF.Position=UDim2.new(0,0,1,-12) tbF.BackgroundColor3=C.dark tbF.BorderSizePixel=0
-local tl=Instance.new("TextLabel",tb) tl.Text="⚡ NICOLA HUB" tl.Size=UDim2.new(1,-40,1,0) tl.Position=UDim2.new(0,12,0,0)
-tl.BackgroundTransparency=1 tl.TextColor3=C.accent tl.TextSize=15 tl.Font=Enum.Font.GothamBold tl.TextXAlignment=Enum.TextXAlignment.Left
-local xb=Instance.new("TextButton",tb) xb.Text="✕" xb.Size=UDim2.new(0,26,0,26) xb.Position=UDim2.new(1,-32,0,5)
+-- ═══ HEADER ═══
+local hdr=Instance.new("Frame",main) hdr.Name="Header" hdr.Size=UDim2.new(1,0,0,38) hdr.BackgroundColor3=C.header hdr.BorderSizePixel=0
+local hdrBottom=Instance.new("Frame",hdr) hdrBottom.Size=UDim2.new(1,0,0,1) hdrBottom.Position=UDim2.new(0,0,1,-1) hdrBottom.BackgroundColor3=C.divider hdrBottom.BorderSizePixel=0
+
+local icon=Instance.new("TextLabel",hdr) icon.Text="⚡" icon.Size=UDim2.new(0,30,1,0) icon.Position=UDim2.new(0,10,0,0)
+icon.BackgroundTransparency=1 icon.TextColor3=C.green icon.TextSize=18 icon.Font=Enum.Font.GothamBold
+
+local titleLbl=Instance.new("TextLabel",hdr) titleLbl.Text="Nicola Hub" titleLbl.Size=UDim2.new(0,100,1,0) titleLbl.Position=UDim2.new(0,38,0,0)
+titleLbl.BackgroundTransparency=1 titleLbl.TextColor3=C.text titleLbl.TextSize=14 titleLbl.Font=Enum.Font.GothamBold titleLbl.TextXAlignment=Enum.TextXAlignment.Left
+
+local verLbl=Instance.new("TextLabel",hdr) verLbl.Text="v5.3" verLbl.Size=UDim2.new(0,40,1,0) verLbl.Position=UDim2.new(0,140,0,0)
+verLbl.BackgroundTransparency=1 verLbl.TextColor3=C.dim verLbl.TextSize=11 verLbl.Font=Enum.Font.Gotham verLbl.TextXAlignment=Enum.TextXAlignment.Left
+
+-- resize button
+local resBtn=Instance.new("TextButton",hdr) resBtn.Text="⇲" resBtn.Size=UDim2.new(0,28,0,28) resBtn.Position=UDim2.new(1,-64,0,5)
+resBtn.BackgroundColor3=C.card resBtn.TextColor3=C.dim resBtn.TextSize=14 resBtn.Font=Enum.Font.GothamBold resBtn.BorderSizePixel=0
+Instance.new("UICorner",resBtn).CornerRadius=UDim.new(0,6)
+
+-- close button
+local xb=Instance.new("TextButton",hdr) xb.Text="✕" xb.Size=UDim2.new(0,28,0,28) xb.Position=UDim2.new(1,-34,0,5)
 xb.BackgroundColor3=C.red xb.TextColor3=Color3.new(1,1,1) xb.TextSize=12 xb.Font=Enum.Font.GothamBold xb.BorderSizePixel=0
 Instance.new("UICorner",xb).CornerRadius=UDim.new(0,6)
 xb.MouseButton1Click:Connect(function() S.afOn=false S.fishOn=false S.mineOn=false gui:Destroy() end)
 
--- drag
+-- drag header
 local dg,ds,dp=false,nil,nil
-tb.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dg=true ds=i.Position dp=main.Position end end)
-tb.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dg=false end end)
+hdr.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dg=true ds=i.Position dp=main.Position end end)
+hdr.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dg=false end end)
 UIS.InputChanged:Connect(function(i) if dg and i.UserInputType==Enum.UserInputType.MouseMovement then local d=i.Position-ds main.Position=UDim2.new(dp.X.Scale,dp.X.Offset+d.X,dp.Y.Scale,dp.Y.Offset+d.Y) end end)
+
+-- resize handle (bottom-right corner)
+local resHandle=Instance.new("TextButton",main) resHandle.Text="◢" resHandle.Size=UDim2.new(0,18,0,18)
+resHandle.Position=UDim2.new(1,-18,1,-18) resHandle.BackgroundTransparency=1
+resHandle.TextColor3=C.dim resHandle.TextSize=14 resHandle.Font=Enum.Font.GothamBold resHandle.ZIndex=10
+local resizing,resStart,sizeStart=false,nil,nil
+resHandle.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then resizing=true resStart=i.Position sizeStart=main.Size end end)
+resHandle.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then resizing=false end end)
+UIS.InputChanged:Connect(function(i) if resizing and i.UserInputType==Enum.UserInputType.MouseMovement then
+    local d=i.Position-resStart
+    local newW=math.max(400,sizeStart.X.Offset+d.X) local newH=math.max(300,sizeStart.Y.Offset+d.Y)
+    main.Size=UDim2.new(0,newW,0,newH)
+end end)
+
+-- minimize/restore
+local minimized=false local savedSize
+resBtn.MouseButton1Click:Connect(function()
+    if minimized then main.Size=savedSize minimized=false
+    else savedSize=main.Size main.Size=UDim2.new(0,savedSize.X.Offset,0,38) minimized=true end
+end)
+
+-- Right Shift toggle
 UIS.InputBegan:Connect(function(i,p) if not p and i.KeyCode==Enum.KeyCode.RightShift then main.Visible=not main.Visible end end)
 
--- tabs
-local tabBar=Instance.new("Frame",main) tabBar.Size=UDim2.new(1,-12,0,26) tabBar.Position=UDim2.new(0,6,0,40) tabBar.BackgroundTransparency=1
-local tabNames={"Farm","Fish","Mine","Player"}
-local tabBtns,tabPages={},{}
-for i,name in ipairs(tabNames) do
-    local b=Instance.new("TextButton",tabBar) b.Text=name
-    b.Size=UDim2.new(1/#tabNames,-2,1,0) b.Position=UDim2.new((i-1)/#tabNames,1,0,0)
-    b.BackgroundColor3=i==1 and C.accent or C.panel b.TextColor3=C.text b.TextSize=11 b.Font=Enum.Font.GothamBold b.BorderSizePixel=0
-    Instance.new("UICorner",b).CornerRadius=UDim.new(0,6)
-    tabBtns[name]=b
-    local p=Instance.new("ScrollingFrame",main) p.Size=UDim2.new(1,-12,1,-76) p.Position=UDim2.new(0,6,0,70)
-    p.BackgroundTransparency=1 p.BorderSizePixel=0 p.ScrollBarThickness=3 p.ScrollBarImageColor3=C.accent
-    p.CanvasSize=UDim2.new(0,0,0,0) p.AutomaticCanvasSize=Enum.AutomaticSize.Y p.Visible=(name=="Farm")
-    Instance.new("UIListLayout",p).Padding=UDim.new(0,3)
-    tabPages[name]=p
-    b.MouseButton1Click:Connect(function()
-        for n,btn in pairs(tabBtns) do btn.BackgroundColor3=n==name and C.accent or C.panel end
-        for n,pg in pairs(tabPages) do pg.Visible=n==name end
-    end)
+-- ═══ SIDEBAR ═══
+local sidebar=Instance.new("Frame",main) sidebar.Name="Sidebar" sidebar.Size=UDim2.new(0,150,1,-38) sidebar.Position=UDim2.new(0,0,0,38)
+sidebar.BackgroundColor3=C.sidebar sidebar.BorderSizePixel=0
+local sideDiv=Instance.new("Frame",sidebar) sideDiv.Size=UDim2.new(0,1,1,0) sideDiv.Position=UDim2.new(1,0,0,0) sideDiv.BackgroundColor3=C.divider sideDiv.BorderSizePixel=0
+local sideScroll=Instance.new("ScrollingFrame",sidebar) sideScroll.Size=UDim2.new(1,0,1,0) sideScroll.BackgroundTransparency=1
+sideScroll.BorderSizePixel=0 sideScroll.ScrollBarThickness=0 sideScroll.CanvasSize=UDim2.new(0,0,0,0) sideScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
+local sLay=Instance.new("UIListLayout",sideScroll) sLay.Padding=UDim.new(0,0)
+local sPad=Instance.new("UIPadding",sideScroll) sPad.PaddingTop=UDim.new(0,8)
+
+-- ═══ CONTENT AREA ═══
+local contentArea=Instance.new("Frame",main) contentArea.Name="Content" contentArea.Size=UDim2.new(1,-151,1,-38) contentArea.Position=UDim2.new(0,151,0,38)
+contentArea.BackgroundColor3=C.content contentArea.BorderSizePixel=0
+
+-- sidebar tabs & content pages
+local allPages={}
+local allTabBtns={}
+local activeTab=""
+
+local function addCategory(catName)
+    local cl=Instance.new("TextLabel",sideScroll) cl.Text=catName cl.Size=UDim2.new(1,0,0,28)
+    cl.BackgroundTransparency=1 cl.TextColor3=C.dim cl.TextSize=10 cl.Font=Enum.Font.GothamBold
+    cl.TextXAlignment=Enum.TextXAlignment.Left
+    local clPad=Instance.new("UIPadding",cl) clPad.PaddingLeft=UDim.new(0,14) clPad.PaddingTop=UDim.new(0,6)
 end
+
+local function addTab(tabName)
+    local tb=Instance.new("TextButton",sideScroll) tb.Text="  "..tabName tb.Size=UDim2.new(1,0,0,30)
+    tb.BackgroundColor3=C.sidebar tb.TextColor3=C.dim tb.TextSize=12 tb.Font=Enum.Font.Gotham
+    tb.TextXAlignment=Enum.TextXAlignment.Left tb.BorderSizePixel=0
+    local tbPad=Instance.new("UIPadding",tb) tbPad.PaddingLeft=UDim.new(0,12)
+    -- active indicator (green left bar)
+    local indicator=Instance.new("Frame",tb) indicator.Name="Indicator" indicator.Size=UDim2.new(0,3,0.6,0) indicator.Position=UDim2.new(0,0,0.2,0)
+    indicator.BackgroundColor3=C.green indicator.BorderSizePixel=0 indicator.Visible=false
+    Instance.new("UICorner",indicator).CornerRadius=UDim.new(0,2)
+
+    -- content page
+    local page=Instance.new("ScrollingFrame",contentArea) page.Size=UDim2.new(1,0,1,0) page.BackgroundTransparency=1
+    page.BorderSizePixel=0 page.ScrollBarThickness=3 page.ScrollBarImageColor3=C.green
+    page.CanvasSize=UDim2.new(0,0,0,0) page.AutomaticCanvasSize=Enum.AutomaticSize.Y page.Visible=false
+    local pLay=Instance.new("UIListLayout",page) pLay.Padding=UDim.new(0,4)
+    local pPad=Instance.new("UIPadding",page) pPad.PaddingTop=UDim.new(0,10) pPad.PaddingBottom=UDim.new(0,10) pPad.PaddingLeft=UDim.new(0,14) pPad.PaddingRight=UDim.new(0,14)
+
+    allPages[tabName]=page
+    allTabBtns[tabName]=tb
+
+    tb.MouseButton1Click:Connect(function()
+        for n,pg in pairs(allPages) do pg.Visible=(n==tabName) end
+        for n,bt in pairs(allTabBtns) do
+            bt.BackgroundColor3=(n==tabName) and C.card or C.sidebar
+            bt.TextColor3=(n==tabName) and C.text or C.dim
+            bt.Font=(n==tabName) and Enum.Font.GothamBold or Enum.Font.Gotham
+            local ind=bt:FindFirstChild("Indicator")
+            if ind then ind.Visible=(n==tabName) end
+        end
+        activeTab=tabName
+    end)
+
+    return page
+end
+
+-- build sidebar
+addCategory("FARM")
+local fp=addTab("Farming")
+local atkP=addTab("Attack")
+local setP=addTab("Settings")
+local mobP=addTab("Mob & Boss")
+local vacP=addTab("Vacuum")
+addCategory("FISH")
+local fishP=addTab("Fishing")
+addCategory("MINE")
+local mineP=addTab("Mining")
+addCategory("PLAYER")
+local playerP=addTab("Player")
+
+-- activate first tab
+allTabBtns["Farming"].MouseButton1Click:Fire()
+allPages["Farming"].Visible=true
+allTabBtns["Farming"].BackgroundColor3=C.card
+allTabBtns["Farming"].TextColor3=C.text
+allTabBtns["Farming"].Font=Enum.Font.GothamBold
+local fInd=allTabBtns["Farming"]:FindFirstChild("Indicator") if fInd then fInd.Visible=true end
 
 -- ═══ UI HELPERS ═══
 local function sec(p,t)
@@ -523,25 +622,33 @@ local function btn(p,t,col,cb)
     if cb then b.MouseButton1Click:Connect(cb) end return b
 end
 
-local function makeToggle(p,t,def,cb)
-    local f=Instance.new("Frame",p) f.Size=UDim2.new(1,0,0,28) f.BackgroundColor3=C.panel f.BorderSizePixel=0
+local function makeToggle(p,t,def,cb,desc)
+    local f=Instance.new("Frame",p) f.Size=UDim2.new(1,0,0,desc and 48 or 32) f.BackgroundColor3=C.card f.BorderSizePixel=0
     Instance.new("UICorner",f).CornerRadius=UDim.new(0,6)
-    local l=Instance.new("TextLabel",f) l.Text=t l.Size=UDim2.new(1,-50,1,0) l.Position=UDim2.new(0,10,0,0)
-    l.BackgroundTransparency=1 l.TextColor3=C.text l.TextSize=12 l.Font=Enum.Font.GothamBold l.TextXAlignment=Enum.TextXAlignment.Left
-    local bg=Instance.new("Frame",f) bg.Size=UDim2.new(0,36,0,18) bg.Position=UDim2.new(1,-42,0.5,-9) bg.BorderSizePixel=0
-    bg.BackgroundColor3=def and C.green or C.uncheck
+    local fPad=Instance.new("UIPadding",f) fPad.PaddingLeft=UDim.new(0,12) fPad.PaddingRight=UDim.new(0,12)
+    -- title
+    local l=Instance.new("TextLabel",f) l.Text=t l.Size=UDim2.new(1,-56,0,18) l.Position=UDim2.new(0,0,0,desc and 6 or 7)
+    l.BackgroundTransparency=1 l.TextColor3=C.text l.TextSize=13 l.Font=Enum.Font.GothamBold l.TextXAlignment=Enum.TextXAlignment.Left
+    -- description
+    if desc then
+        local d=Instance.new("TextLabel",f) d.Text=desc d.Size=UDim2.new(1,-56,0,16) d.Position=UDim2.new(0,0,0,24)
+        d.BackgroundTransparency=1 d.TextColor3=C.dim d.TextSize=10 d.Font=Enum.Font.Gotham d.TextXAlignment=Enum.TextXAlignment.Left
+    end
+    -- pill toggle
+    local bg=Instance.new("Frame",f) bg.Size=UDim2.new(0,40,0,20) bg.Position=UDim2.new(1,-40,0.5,-10) bg.BorderSizePixel=0
+    bg.BackgroundColor3=def and C.green or C.toggleOff
     Instance.new("UICorner",bg).CornerRadius=UDim.new(1,0)
-    local dot=Instance.new("Frame",bg) dot.Size=UDim2.new(0,14,0,14) dot.BackgroundColor3=Color3.new(1,1,1) dot.BorderSizePixel=0
-    dot.Position=def and UDim2.new(1,-16,0.5,-7) or UDim2.new(0,2,0.5,-7)
+    local dot=Instance.new("Frame",bg) dot.Size=UDim2.new(0,16,0,16) dot.BackgroundColor3=Color3.new(1,1,1) dot.BorderSizePixel=0
+    dot.Position=def and UDim2.new(1,-18,0.5,-8) or UDim2.new(0,2,0.5,-8)
     Instance.new("UICorner",dot).CornerRadius=UDim.new(1,0)
     local on=def
     local obj={frame=f,label=l}
     function obj.isOn() return on end
     function obj.setOn(v) on=v
-        TweenService:Create(bg,TweenInfo.new(0.1),{BackgroundColor3=on and C.green or C.uncheck}):Play()
-        TweenService:Create(dot,TweenInfo.new(0.1),{Position=on and UDim2.new(1,-16,0.5,-7) or UDim2.new(0,2,0.5,-7)}):Play()
+        TweenService:Create(bg,TweenInfo.new(0.15),{BackgroundColor3=on and C.green or C.toggleOff}):Play()
+        TweenService:Create(dot,TweenInfo.new(0.15),{Position=on and UDim2.new(1,-18,0.5,-8) or UDim2.new(0,2,0.5,-8)}):Play()
     end
-    local b2=Instance.new("TextButton",bg) b2.Text="" b2.Size=UDim2.new(1,0,1,0) b2.BackgroundTransparency=1
+    local b2=Instance.new("TextButton",f) b2.Text="" b2.Size=UDim2.new(1,0,1,0) b2.BackgroundTransparency=1
     b2.MouseButton1Click:Connect(function() on=not on obj.setOn(on) if cb then cb(on) end end)
     return obj
 end
@@ -678,12 +785,10 @@ local function makeDropdown(parent, title, items, stateTable, refreshCb)
     return obj
 end
 
--- ═══ FARM PAGE ═══
-local fp=tabPages["Farm"]
-sec(fp,"AUTOFARM")
+-- ═══ FARM PAGE (Farming tab) ═══
 local afToggle, fishToggle, mineToggle
 
-afToggle=makeToggle(fp,"⚔ Autofarm",false,function(on)
+afToggle=makeToggle(fp,"Auto Farm",false,function(on)
     S.afOn=on
     if on then
         if S.fishOn then S.fishOn=false fishToggle.setOn(false) end
@@ -696,20 +801,18 @@ afToggle=makeToggle(fp,"⚔ Autofarm",false,function(on)
                     print("[NH] Riavvio automatico in 3s...")
                     task.wait(3)
                 else
-                    break -- uscito normalmente (S.afOn = false)
+                    break
                 end
             end
         end)
     end
-end)
+end,"Universal Auto Farm for Mobs and Bosses.")
 local statusLbl=lbl(fp,"Status: Idle")
 local statsLbl=lbl(fp,"Kills: 0 | Drops: 0 | 00:00")
 
-sec(fp,"ATTACCO")
-
--- Primary tool dropdown
+-- ═══ ATTACK PAGE ═══
 local primaryDropdown
-local primaryLabel=lbl(fp,"Primary: nessuno")
+local primaryLabel=lbl(atkP,"Primary: nessuno")
 
 local function scanAllTools()
     local bp=plr:FindFirstChild("Backpack")
@@ -718,32 +821,24 @@ local function scanAllTools()
     if bp then for _,t in pairs(bp:GetChildren()) do if t:IsA("Tool") then table.insert(allTools,t) end end end
     if c then for _,t in pairs(c:GetChildren()) do if t:IsA("Tool") then table.insert(allTools,t) end end end
 
-    -- PRIMARY: tutti i tool, uno solo selezionabile
-    -- ricostruisco il container ogni volta
     if primaryDropdown then primaryDropdown.wrapper:Destroy() primaryDropdown=nil end
 
-    local primItems = {}
-    for _,t in ipairs(allTools) do
-        table.insert(primItems, {name=t.Name})
-    end
-
-    -- Dropdown per primary (click per selezionare UNO)
-    local pw = Instance.new("Frame",fp) pw.Size=UDim2.new(1,0,0,0)
+    local pw = Instance.new("Frame",atkP) pw.Size=UDim2.new(1,0,0,0)
     pw.BackgroundTransparency=1 pw.AutomaticSize=Enum.AutomaticSize.Y
     Instance.new("UIListLayout",pw).Padding=UDim.new(0,0)
 
-    local ph=Instance.new("TextButton",pw) ph.Size=UDim2.new(1,0,0,28)
-    ph.BackgroundColor3=C.panel ph.BorderSizePixel=0 ph.TextColor3=C.text ph.TextSize=12
+    local ph=Instance.new("TextButton",pw) ph.Size=UDim2.new(1,0,0,32)
+    ph.BackgroundColor3=C.card ph.BorderSizePixel=0 ph.TextColor3=C.text ph.TextSize=13
     ph.Font=Enum.Font.GothamBold ph.TextXAlignment=Enum.TextXAlignment.Left
     Instance.new("UICorner",ph).CornerRadius=UDim.new(0,6)
-    Instance.new("UIPadding",ph).PaddingLeft=UDim.new(0,10)
+    Instance.new("UIPadding",ph).PaddingLeft=UDim.new(0,12)
 
     local primOpen = false
     local pc = Instance.new("Frame",pw) pc.Size=UDim2.new(1,0,0,0)
     pc.BackgroundColor3=C.dark pc.BorderSizePixel=0 pc.Visible=false
     pc.AutomaticSize=Enum.AutomaticSize.Y
     Instance.new("UICorner",pc).CornerRadius=UDim.new(0,6)
-    local pp=Instance.new("UIPadding",pc) pp.PaddingTop=UDim.new(0,4) pp.PaddingBottom=UDim.new(0,4) pp.PaddingLeft=UDim.new(0,4) pp.PaddingRight=UDim.new(0,4)
+    local pp=Instance.new("UIPadding",pc) pp.PaddingTop=UDim.new(0,4) pp.PaddingBottom=UDim.new(0,4) pp.PaddingLeft=UDim.new(0,6) pp.PaddingRight=UDim.new(0,6)
     Instance.new("UIListLayout",pc).Padding=UDim.new(0,2)
 
     local function updPrimHeader()
@@ -758,7 +853,7 @@ local function scanAllTools()
             local isSel = (S.primaryTool == t.Name)
             local b = Instance.new("TextButton",pc)
             b.Text = (isSel and "✓ " or "   ") .. t.Name
-            b.Size=UDim2.new(1,0,0,22) b.BackgroundColor3=isSel and C.green or C.panel
+            b.Size=UDim2.new(1,0,0,24) b.BackgroundColor3=isSel and C.green or C.card
             b.TextColor3=C.text b.TextSize=11 b.Font=Enum.Font.GothamBold b.BorderSizePixel=0
             Instance.new("UICorner",b).CornerRadius=UDim.new(0,4)
             b.MouseButton1Click:Connect(function()
@@ -781,33 +876,31 @@ local function scanAllTools()
 
     primaryDropdown = {wrapper=pw}
 
-    -- MAGIC: dropdown collassabile con checkbox
     local magicItems = {}
     for _,t in ipairs(allTools) do
         if S.useMagic[t.Name]==nil then S.useMagic[t.Name]=false end
         table.insert(magicItems, {name=t.Name})
     end
 
-    -- remove old magic dropdown if exists
     if _magicDropdown then _magicDropdown.wrapper:Destroy() end
-    _magicDropdown = makeDropdown(fp, "✨ Magic Skills", magicItems, S.useMagic)
+    _magicDropdown = makeDropdown(atkP, "✨ Magic Skills", magicItems, S.useMagic)
 end
 
 local _magicDropdown
 
-btn(fp,"🔄 Refresh Tools & Skills",C.accent,function() scanAllTools() end)
+btn(atkP,"🔄 Refresh Tools & Skills",C.green,function() scanAllTools() end)
 task.defer(scanAllTools)
 
-makeSlider(fp,"Magic ogni (sec)",1,10,3,function(v) S.magicInterval=v end)
+makeSlider(atkP,"Magic Interval (sec)",1,10,3,function(v) S.magicInterval=v end)
 
-sec(fp,"SETTINGS")
-makeSlider(fp,"Fly Speed",30,400,120,function(v) S.flySpeed=v end)
-makeSlider(fp,"Altezza dal mob",0,30,5,function(v) S.mobHeight=v end)
-makeSlider(fp,"Attack Range",5,60,16,function(v) S.atkRange=v end)
-makeSlider(fp,"Attack Speed (ms)",50,500,250,function(v) S.atkSpeed=v/1000 end)
-makeSlider(fp,"Hitbox Expand (x)",1,50,15,function(v) S.hitboxMult=v end)
+-- ═══ SETTINGS PAGE ═══
+makeSlider(setP,"Fly Speed",30,400,120,function(v) S.flySpeed=v end)
+makeSlider(setP,"Altezza dal mob",0,30,5,function(v) S.mobHeight=v end)
+makeSlider(setP,"Attack Range",5,60,16,function(v) S.atkRange=v end)
+makeSlider(setP,"Attack Speed (ms)",50,500,250,function(v) S.atkSpeed=v/1000 end)
+makeSlider(setP,"Hitbox Expand (x)",1,50,15,function(v) S.hitboxMult=v end)
 
-sec(fp,"MOB & BOSS")
+-- ═══ MOB & BOSS PAGE ═══
 
 local mobDropdown, bossDropdown
 
@@ -840,33 +933,27 @@ local function scanMobs()
     if mobDropdown then
         mobDropdown.refresh(mobItems)
     else
-        mobDropdown = makeDropdown(fp, "🗡 Mob", mobItems, S.selectedMobs)
+        mobDropdown = makeDropdown(mobP, "🗡 Mob", mobItems, S.selectedMobs)
     end
 
     if bossDropdown then
         bossDropdown.refresh(bossItems)
     else
-        bossDropdown = makeDropdown(fp, "👑 Boss", bossItems, S.selectedMobs)
+        bossDropdown = makeDropdown(mobP, "👑 Boss", bossItems, S.selectedMobs)
     end
 
     print("[NH] Scan: "..#mobItems.." mob, "..#bossItems.." boss")
 end
 
-btn(fp,"🔍 Refresh Mob & Boss",C.accent,function() scanMobs() end)
+btn(mobP,"🔍 Refresh Mob & Boss",C.green,function() scanMobs() end)
 task.defer(scanMobs)
 
-sec(fp,"VACUUM")
-makeToggle(fp,"🌀 Mob Vacuum (risucchio)",false,function(v) S.vacuum=v end)
-makeSlider(fp,"Vacuum Range",20,200,80,function(v) S.vacuumRange=v end)
-
-sec(fp,"OPZIONI")
-makeToggle(fp,"Auto Pickup",true,function(v) S.autoPickup=v end)
-makeToggle(fp,"Anti-AFK",true,function(v) S.antiAFK=v end)
+-- ═══ VACUUM PAGE ═══
+makeToggle(vacP,"Mob Vacuum",false,function(v) S.vacuum=v end,"Risucchia tutti i mob nel raggio verso di te.")
+makeSlider(vacP,"Vacuum Range",20,200,80,function(v) S.vacuumRange=v end)
 
 -- ═══ FISH PAGE ═══
-local fishP=tabPages["Fish"]
-sec(fishP,"AUTO FISHING")
-fishToggle=makeToggle(fishP,"🎣 Auto Fish",false,function(on)
+fishToggle=makeToggle(fishP,"Auto Fish",false,function(on)
     S.fishOn=on
     if on then
         if S.afOn then S.afOn=false afToggle.setOn(false) end
@@ -878,15 +965,13 @@ fishToggle=makeToggle(fishP,"🎣 Auto Fish",false,function(on)
             end
         end)
     end
-end)
+end,"Pesca automatica nei Fishing Spots.")
 local fishStatus=lbl(fishP,"Status: Idle")
 local fishStats=lbl(fishP,"Fish: 0")
 makeSlider(fishP,"Fly Speed",30,400,120,function(v) S.flySpeed=v end)
 
 -- ═══ MINE PAGE ═══
-local mineP=tabPages["Mine"]
-sec(mineP,"AUTO MINING")
-mineToggle=makeToggle(mineP,"⛏ Auto Mine",false,function(on)
+mineToggle=makeToggle(mineP,"Auto Mine",false,function(on)
     S.mineOn=on
     if on then
         if S.afOn then S.afOn=false afToggle.setOn(false) end
@@ -898,11 +983,10 @@ mineToggle=makeToggle(mineP,"⛏ Auto Mine",false,function(on)
             end
         end)
     end
-end)
+end,"Mina automaticamente i minerali selezionati.")
 local mineStatus=lbl(mineP,"Status: Idle")
 local mineStats=lbl(mineP,"Ores: 0")
 makeSlider(mineP,"Fly Speed",30,400,120,function(v) S.flySpeed=v end)
-sec(mineP,"MINERALI")
 local oreDropdown
 
 local function scanOres()
@@ -923,14 +1007,14 @@ local function scanOres()
     end
 end
 
-btn(mineP,"🔍 Refresh Minerali",C.accent,function() scanOres() end)
+btn(mineP,"🔍 Refresh Minerali",C.green,function() scanOres() end)
 task.defer(scanOres)
 
 -- ═══ PLAYER PAGE ═══
-local playerP=tabPages["Player"]
-sec(playerP,"MOVIMENTO")
-makeToggle(playerP,"✈ Fly (WASD+Space)",false,function(v) S.flyOn=v end)
-makeToggle(playerP,"👻 Noclip",false,function(v) S.noclip=v end)
+makeToggle(playerP,"Auto Pickup",true,function(v) S.autoPickup=v end,"Raccoglie automaticamente i drop.")
+makeToggle(playerP,"Anti-AFK",true,function(v) S.antiAFK=v end,"Previene il kick per inattività.")
+makeToggle(playerP,"Noclip",false,function(v) S.noclip=v end,"Attraversa muri e oggetti solidi.")
+makeToggle(playerP,"Fly",false,function(v) S.flyOn=v end,"Vola liberamente con WASD + Space/Shift.")
 makeSlider(playerP,"Fly Speed",30,400,120,function(v) S.flySpeed=v end)
 sec(playerP,"TOOLS")
 local function refreshTools()
@@ -939,11 +1023,11 @@ local function refreshTools()
     if eq then local b=btn(playerP,"✓ "..eq.Name,C.green) b.Name="TL_"..eq.Name end
     local bp=plr:FindFirstChild("Backpack")
     if bp then for _,t in pairs(bp:GetChildren()) do if t:IsA("Tool") then
-        local b=btn(playerP,t.Name,C.panel,function() local h=humf() if h then h:EquipTool(t) end task.wait(0.3) refreshTools() end)
+        local b=btn(playerP,t.Name,C.card,function() local h=humf() if h then h:EquipTool(t) end task.wait(0.3) refreshTools() end)
         b.Name="TL_"..t.Name
     end end end
 end
-btn(playerP,"🔄 Refresh Tools",C.accent,function() refreshTools() end)
+btn(playerP,"🔄 Refresh Tools",C.green,function() refreshTools() end)
 task.defer(refreshTools)
 
 -- ═══ FIND MOB ═══

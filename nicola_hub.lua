@@ -639,24 +639,15 @@ local function addTab(tabName)
     return page
 end
 
--- build sidebar
-addCategory("FARM")
-local fp=addTab("Farming")
-local atkP=addTab("Attack")
-local setP=addTab("Settings")
-local mobP=addTab("Mob & Boss")
-local vacP=addTab("Vacuum")
-addCategory("FISH")
+-- build sidebar — 5 tabs semplici
+local fp=addTab("Farm")
 local fishP=addTab("Fishing")
-addCategory("MINE")
 local mineP=addTab("Mining")
-addCategory("PLAYER")
 local playerP=addTab("Player")
-addCategory("SYSTEM")
 local cfgP=addTab("Config")
 
 -- activate first tab
-switchTab("Farming")
+switchTab("Farm")
 
 -- ═══ UI HELPERS ═══
 local function sec(p,t)
@@ -866,9 +857,10 @@ end,"Universal Auto Farm for Mobs and Bosses.")
 local statusLbl=lbl(fp,"Status: Idle")
 local statsLbl=lbl(fp,"Kills: 0 | Drops: 0 | 00:00")
 
--- ═══ ATTACK PAGE ═══
+-- ═══ ATTACK ═══
+sec(fp,"ATTACK")
 local primaryDropdown
-local primaryLabel=lbl(atkP,"Primary: nessuno")
+local primaryLabel=lbl(fp,"Primary: nessuno")
 
 local function scanAllTools()
     local bp=plr:FindFirstChild("Backpack")
@@ -879,7 +871,7 @@ local function scanAllTools()
 
     if primaryDropdown then primaryDropdown.wrapper:Destroy() primaryDropdown=nil end
 
-    local pw = Instance.new("Frame",atkP) pw.Size=UDim2.new(1,0,0,0)
+    local pw = Instance.new("Frame",fp) pw.Size=UDim2.new(1,0,0,0)
     pw.BackgroundTransparency=1 pw.AutomaticSize=Enum.AutomaticSize.Y
     Instance.new("UIListLayout",pw).Padding=UDim.new(0,0)
 
@@ -939,24 +931,26 @@ local function scanAllTools()
     end
 
     if _magicDropdown then _magicDropdown.wrapper:Destroy() end
-    _magicDropdown = makeDropdown(atkP, "✨ Magic Skills", magicItems, S.useMagic)
+    _magicDropdown = makeDropdown(fp, "✨ Magic Skills", magicItems, S.useMagic)
 end
 
 local _magicDropdown
 
-btn(atkP,"🔄 Refresh Tools & Skills",C.green,function() scanAllTools() end)
+btn(fp,"🔄 Refresh Tools & Skills",C.green,function() scanAllTools() end)
 task.defer(scanAllTools)
 
-makeSlider(atkP,"Magic Interval (sec)",1,10,3,function(v) S.magicInterval=v end)
+makeSlider(fp,"Magic Interval (sec)",1,10,3,function(v) S.magicInterval=v end)
 
--- ═══ SETTINGS PAGE ═══
-makeSlider(setP,"Fly Speed",30,400,S.flySpeed,function(v) S.flySpeed=v saveConfig() end)
-makeSlider(setP,"Altezza dal mob",0,30,S.mobHeight,function(v) S.mobHeight=v saveConfig() end)
-makeSlider(setP,"Attack Range",5,60,S.atkRange,function(v) S.atkRange=v saveConfig() end)
-makeSlider(setP,"Attack Speed (ms)",50,500,math.floor(S.atkSpeed*1000),function(v) S.atkSpeed=v/1000 saveConfig() end)
-makeSlider(setP,"Hitbox Expand (x)",1,50,S.hitboxMult,function(v) S.hitboxMult=v saveConfig() end)
+-- ═══ SETTINGS ═══
+sec(fp,"SETTINGS")
+makeSlider(fp,"Fly Speed",30,400,S.flySpeed,function(v) S.flySpeed=v saveConfig() end)
+makeSlider(fp,"Altezza dal mob",0,30,S.mobHeight,function(v) S.mobHeight=v saveConfig() end)
+makeSlider(fp,"Attack Range",5,60,S.atkRange,function(v) S.atkRange=v saveConfig() end)
+makeSlider(fp,"Attack Speed (ms)",50,500,math.floor(S.atkSpeed*1000),function(v) S.atkSpeed=v/1000 saveConfig() end)
+makeSlider(fp,"Hitbox Expand (x)",1,50,S.hitboxMult,function(v) S.hitboxMult=v saveConfig() end)
 
--- ═══ MOB & BOSS PAGE ═══
+-- ═══ MOB & BOSS ═══
+sec(fp,"MOB & BOSS")
 
 local mobDropdown, bossDropdown
 
@@ -989,24 +983,25 @@ local function scanMobs()
     if mobDropdown then
         mobDropdown.refresh(mobItems)
     else
-        mobDropdown = makeDropdown(mobP, "🗡 Mob", mobItems, S.selectedMobs)
+        mobDropdown = makeDropdown(fp, "🗡 Mob", mobItems, S.selectedMobs)
     end
 
     if bossDropdown then
         bossDropdown.refresh(bossItems)
     else
-        bossDropdown = makeDropdown(mobP, "👑 Boss", bossItems, S.selectedMobs)
+        bossDropdown = makeDropdown(fp, "👑 Boss", bossItems, S.selectedMobs)
     end
 
     print("[NH] Scan: "..#mobItems.." mob, "..#bossItems.." boss")
 end
 
-btn(mobP,"🔍 Refresh Mob & Boss",C.green,function() scanMobs() end)
+btn(fp,"🔍 Refresh Mob & Boss",C.green,function() scanMobs() end)
 task.defer(scanMobs)
 
--- ═══ VACUUM PAGE ═══
-makeToggle(vacP,"Mob Vacuum",S.vacuum,function(v) S.vacuum=v saveConfig() end,"Risucchia tutti i mob nel raggio verso di te.")
-makeSlider(vacP,"Vacuum Range",20,200,S.vacuumRange,function(v) S.vacuumRange=v saveConfig() end)
+-- ═══ VACUUM ═══
+sec(fp,"VACUUM")
+makeToggle(fp,"Mob Vacuum",S.vacuum,function(v) S.vacuum=v saveConfig() end,"Risucchia tutti i mob nel raggio verso di te.")
+makeSlider(fp,"Vacuum Range",20,200,S.vacuumRange,function(v) S.vacuumRange=v saveConfig() end)
 
 -- ═══ FISH PAGE ═══
 fishToggle=makeToggle(fishP,"Auto Fish",false,function(on)

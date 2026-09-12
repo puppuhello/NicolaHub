@@ -28,7 +28,7 @@ local remotes=RS:FindFirstChild("Remotes")
 local S = {
     afOn=false, fishOn=false, mineOn=false, flyOn=false, noclip=false,
     autoPickup=true, antiAFK=true,
-    flySpeed=120, atkSpeed=0.25, atkRange=16, mobHeight=5,
+    flySpeed=200, atkSpeed=0.25, atkRange=16, mobHeight=5,
     magicInterval=3, hitboxMult=15,
     vacuum=false, vacuumRange=80,
     kills=0, drops=0, fish=0, ores=0,
@@ -526,8 +526,10 @@ Instance.new("UIStroke",main).Color=C.border
 local hdr=Instance.new("Frame",main) hdr.Name="Header" hdr.Size=UDim2.new(1,0,0,38) hdr.BackgroundColor3=C.header hdr.BorderSizePixel=0
 local hdrBottom=Instance.new("Frame",hdr) hdrBottom.Size=UDim2.new(1,0,0,1) hdrBottom.Position=UDim2.new(0,0,1,-1) hdrBottom.BackgroundColor3=C.divider hdrBottom.BorderSizePixel=0
 
-local icon=Instance.new("TextLabel",hdr) icon.Text="⚡" icon.Size=UDim2.new(0,30,1,0) icon.Position=UDim2.new(0,10,0,0)
-icon.BackgroundTransparency=1 icon.TextColor3=C.green icon.TextSize=18 icon.Font=Enum.Font.GothamBold
+local icon=Instance.new("ImageLabel",hdr) icon.Size=UDim2.new(0,26,0,26) icon.Position=UDim2.new(0,8,0,6)
+icon.BackgroundTransparency=1 icon.Image="https://raw.githubusercontent.com/puppuhello/NicolaHub/main/icon.png"
+icon.ScaleType=Enum.ScaleType.Crop
+Instance.new("UICorner",icon).CornerRadius=UDim.new(1,0)
 
 local titleLbl=Instance.new("TextLabel",hdr) titleLbl.Text="Nicola Hub" titleLbl.Size=UDim2.new(0,100,1,0) titleLbl.Position=UDim2.new(0,38,0,0)
 titleLbl.BackgroundTransparency=1 titleLbl.TextColor3=C.text titleLbl.TextSize=14 titleLbl.Font=Enum.Font.GothamBold titleLbl.TextXAlignment=Enum.TextXAlignment.Left

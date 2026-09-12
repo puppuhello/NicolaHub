@@ -1133,16 +1133,99 @@ end
 
 -- ═══ ATTACK (con slots) ═══
 local lastMagicTime = 0
+local currentTarget = nil -- mob attualmente sotto attacco
 
 local VIM = pcall(function() return game:GetService("VirtualInputManager") end) and game:GetService("VirtualInputManager") or nil
+
+-- punta la camera verso il mob
+local function aimAtMob(mob)
+    pcall(function()
+        local cam = workspace.CurrentCamera
+        local r = hrpf()
+        if not r then return end
+        local mp = mobPos(mob)
+        if not mp then return end
+        cam.CFrame = CFrame.new(cam.CFrame.Position, mp)
+    end)
+end
+
+-- firetouchinterest tra Handle del tool e parti del mob (100% hit)
+local function touchMob(mob)
+    pcall(function()
+        local c = plr.Character
+        if not c then return end
+        local tool = c:FindFirstChildOfClass("Tool")
+        if not tool then return end
+
+        -- trova l'handle del tool
+        local handle = tool:FindFirstChild("Handle")
+        if not handle then
+            for _, p in pairs(tool:GetDescendants()) do
+                if p:IsA("BasePart") then handle = p break end
+            end
+        end
+        if not handle then return end
+
+        -- tocca TUTTE le parti del mob
+        for _, part in pairs(mob:GetDescendants()) do
+            if part:IsA("BasePart") then
+                pcall(function()
+                    firetouchinterest(handle, part, 0)
+                    task.wait()
+                    firetouchinterest(handle, part, 1)
+                end)
+            end
+        end
+    end)
+end
+
+-- click VIM mirato alla posizione del mob sullo schermo
+local function clickAtMob(mob)
+    if not VIM then return end
+    pcall(function()
+        local cam = workspace.CurrentCamera
+        local mp = mobPos(mob)
+        if not mp then
+            -- fallback: centro schermo
+            local cx = cam.ViewportSize.X / 2
+            local cy = cam.ViewportSize.Y / 2
+            VIM:SendMouseButtonEvent(cx, cy, 0, true, game, 1)
+            task.wait(0.015)
+            VIM:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
+            return
+        end
+        -- proietta posizione mob sullo schermo
+        local screenPos, onScreen = cam:WorldToViewportPoint(mp)
+        local cx, cy
+        if onScreen then
+            cx = screenPos.X
+            cy = screenPos.Y
+        else
+            cx = cam.ViewportSize.X / 2
+            cy = cam.ViewportSize.Y / 2
+        end
+        VIM:SendMouseButtonEvent(cx, cy, 0, true, game, 1)
+        task.wait(0.015)
+        VIM:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
+    end)
+end
 
 local function doM1Attack()
     local c=plr.Character if not c then return end
     local tool=c:FindFirstChildOfClass("Tool")
+
+    -- 1. punta camera al mob
+    if currentTarget and currentTarget.Parent then
+        aimAtMob(currentTarget)
+    end
+
+    -- 2. tool:Activate()
     if tool then pcall(function() tool:Activate() end) end
 
-    -- VirtualInputManager: click nel gioco senza toccare il mouse reale
-    if VIM then
+    -- 3. click VIM mirato al mob
+    if currentTarget and currentTarget.Parent then
+        clickAtMob(currentTarget)
+    elseif VIM then
         pcall(function()
             local cam = workspace.CurrentCamera
             local cx = cam.ViewportSize.X / 2
@@ -1151,6 +1234,11 @@ local function doM1Attack()
             task.wait(0.015)
             VIM:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
         end)
+    end
+
+    -- 4. firetouchinterest (garantisce il colpo)
+    if currentTarget and currentTarget.Parent then
+        touchMob(currentTarget)
     end
 end
 
@@ -1313,6 +1401,7 @@ function farmLoop()
 
         if mob then
             local mhp = mobMaxHP(mob)
+            currentTarget = mob -- imposta target per attacco mirato
 
             -- STEP 4: combatti
             while S.afOn and gui and gui.Parent do
@@ -1379,6 +1468,7 @@ function farmLoop()
             pcall(function()
                 if mob and (not mob.Parent or mobHP(mob)<=0) then S.kills=S.kills+1 end
             end)
+            currentTarget = nil
 
             task.wait(0.3)
             if alive() then pcall(pickDrops) end

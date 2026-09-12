@@ -315,14 +315,44 @@ end
 -- alias
 local equipAnyTool = equipPrimary
 
--- ═══ ANTI-CLIMB + ANTI-JUMP + NOCLIP ═══
+-- ═══ ANTI-CLIMB + ANTI-JUMP + NOCLIP (ULTRA) ═══
+local stateConn = nil
+
+local function hookStateChanged(hum)
+    if stateConn then pcall(function() stateConn:Disconnect() end) end
+    stateConn = hum.StateChanged:Connect(function(_, newState)
+        if not (S.afOn or S.fishOn or S.mineOn) then return end
+        if newState ~= Enum.HumanoidStateType.Physics
+            and newState ~= Enum.HumanoidStateType.Running
+            and newState ~= Enum.HumanoidStateType.Dead then
+            pcall(function()
+                hum:ChangeState(Enum.HumanoidStateType.Physics)
+            end)
+        end
+    end)
+end
+
+-- hook iniziale
+pcall(function()
+    local c = plr.Character
+    if c then
+        local h = c:FindFirstChildOfClass("Humanoid")
+        if h then hookStateChanged(h) end
+    end
+end)
+
+-- re-hook su ogni respawn
+plr.CharacterAdded:Connect(function(newChar)
+    local h = newChar:WaitForChild("Humanoid", 10)
+    if h then hookStateChanged(h) end
+end)
+
 local function disableClimb()
     pcall(function()
         local c = plr.Character
         if not c then return end
         local h = c:FindFirstChildOfClass("Humanoid")
         if not h then return end
-        -- disabilita TUTTI gli state problematici
         h:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
         h:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
         h:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
@@ -330,16 +360,42 @@ local function disableClimb()
         h:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
         h:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
         h:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
-        -- forza SEMPRE in Physics durante autofarm/fish/mine
         if S.afOn or S.fishOn or S.mineOn then
-            local state = h:GetState()
-            if state ~= Enum.HumanoidStateType.Physics then
-                h:ChangeState(Enum.HumanoidStateType.Physics)
-            end
-            h.Jump = false -- blocca jump
+            h:ChangeState(Enum.HumanoidStateType.Physics)
+            h.Jump = false
+            -- anche WalkSpeed 0 per evitare che cammini sui muri
+            if h.WalkSpeed > 0 then h.WalkSpeed = 0 end
         end
     end)
 end
+
+-- noclip anche parti vicine del mondo (muri)
+local function noclipNearby()
+    pcall(function()
+        local r = hrpf()
+        if not r then return end
+        local pos = r.Position
+        -- rendi noclip tutto nel raggio di 30 studs
+        for _, part in pairs(workspace:GetPartBoundsInRadius(pos, 30, OverlapParams.new())) do
+            if part.CanCollide and not part:IsDescendantOf(plr.Character) then
+                part.CanCollide = false
+                -- ripristina dopo 2 secondi
+                task.delay(2, function()
+                    pcall(function() part.CanCollide = true end)
+                end)
+            end
+        end
+    end)
+end
+
+-- RenderStepped: gira PRIMA della fisica, più prioritario
+pcall(function()
+    RunService.RenderStepped:Connect(function()
+        if S.afOn or S.fishOn or S.mineOn then
+            disableClimb()
+        end
+    end)
+end)
 
 RunService.Stepped:Connect(function()
     if S.noclip or S.afOn or S.fishOn or S.mineOn then
@@ -351,6 +407,7 @@ RunService.Stepped:Connect(function()
             end
         end)
         disableClimb()
+        if S.afOn or S.fishOn or S.mineOn then noclipNearby() end
     end
 end)
 

@@ -1901,18 +1901,49 @@ function fishLoop()
             continue
         end
 
-        -- STEP 2: spawna/trova la barca
+        -- STEP 2: trova la barca (spawnata dall'utente)
         local myBoat = findMyBoat()
         if not myBoat then
-            fishStatus.Text="🚤 Spawno barca dal menu..."
-            spawnBoatFromMenu()
+            fishStatus.Text="🚤 Spawna barca dal menu!"
+            print("[NH] ⚠ Nessuna barca trovata! L'utente deve spawnarla dal menu Boats")
+            -- prova a cercare remotes per spawn
+            pcall(function()
+                local rs = game:GetService("ReplicatedStorage")
+                for _,r in pairs(rs:GetDescendants()) do
+                    if (r:IsA("RemoteEvent") or r:IsA("RemoteFunction")) then
+                        local nm = r.Name:lower()
+                        if nm:find("boat") and (nm:find("spawn") or nm:find("place") or nm:find("summon") or nm:find("deploy")) then
+                            print("[NH] 🚤 Provo remote: "..r:GetFullName())
+                            if r:IsA("RemoteEvent") then
+                                pcall(function() r:FireServer("Fishing Boat") end)
+                                pcall(function() r:FireServer("Coffin Boat") end)
+                                pcall(function() r:FireServer(1) end)
+                                pcall(function() r:FireServer() end)
+                            else
+                                pcall(function() r:InvokeServer("Fishing Boat") end)
+                            end
+                        end
+                    end
+                end
+            end)
             task.wait(2)
             myBoat = findMyBoat()
-            if myBoat then
-                print("[NH] 🚤 Barca spawnata!")
-            else
-                print("[NH] ⚠ Barca non trovata dopo spawn. Pesco senza barca...")
+            if not myBoat then
+                -- aspetta che l'utente spawni la barca
+                local waited = 0
+                while not myBoat and S.fishOn and waited < 30 do
+                    fishStatus.Text="🚤 Spawna barca dal menu! ("..math.floor(30-waited).."s)"
+                    task.wait(2)
+                    waited = waited + 2
+                    myBoat = findMyBoat()
+                end
+                if not myBoat then
+                    fishStatus.Text="⚠ Pesco senza barca..."
+                    print("[NH] ⚠ Timeout barca, provo a pescare comunque")
+                end
             end
+        else
+            print("[NH] 🚤 Barca trovata: "..myBoat:GetFullName())
         end
 
         -- STEP 3: vai al fish spot e porta la barca

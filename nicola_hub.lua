@@ -537,25 +537,38 @@ contentArea.BackgroundColor3=C.content contentArea.BorderSizePixel=0
 local allPages={}
 local allTabBtns={}
 local activeTab=""
+local layoutIdx=0
 
 local function addCategory(catName)
+    layoutIdx=layoutIdx+1
     local cl=Instance.new("TextLabel",sideScroll) cl.Text=catName cl.Size=UDim2.new(1,0,0,28)
     cl.BackgroundTransparency=1 cl.TextColor3=C.dim cl.TextSize=10 cl.Font=Enum.Font.GothamBold
-    cl.TextXAlignment=Enum.TextXAlignment.Left
+    cl.TextXAlignment=Enum.TextXAlignment.Left cl.LayoutOrder=layoutIdx
     local clPad=Instance.new("UIPadding",cl) clPad.PaddingLeft=UDim.new(0,14) clPad.PaddingTop=UDim.new(0,6)
 end
 
+local function switchTab(tabName)
+    for n,pg in pairs(allPages) do pg.Visible=(n==tabName) end
+    for n,bt in pairs(allTabBtns) do
+        bt.BackgroundColor3=(n==tabName) and C.card or C.sidebar
+        bt.TextColor3=(n==tabName) and C.text or C.dim
+        bt.Font=(n==tabName) and Enum.Font.GothamBold or Enum.Font.Gotham
+        local ind=bt:FindFirstChild("Indicator")
+        if ind then ind.Visible=(n==tabName) end
+    end
+    activeTab=tabName
+end
+
 local function addTab(tabName)
+    layoutIdx=layoutIdx+1
     local tb=Instance.new("TextButton",sideScroll) tb.Text="  "..tabName tb.Size=UDim2.new(1,0,0,30)
     tb.BackgroundColor3=C.sidebar tb.TextColor3=C.dim tb.TextSize=12 tb.Font=Enum.Font.Gotham
-    tb.TextXAlignment=Enum.TextXAlignment.Left tb.BorderSizePixel=0
+    tb.TextXAlignment=Enum.TextXAlignment.Left tb.BorderSizePixel=0 tb.LayoutOrder=layoutIdx
     local tbPad=Instance.new("UIPadding",tb) tbPad.PaddingLeft=UDim.new(0,12)
-    -- active indicator (green left bar)
     local indicator=Instance.new("Frame",tb) indicator.Name="Indicator" indicator.Size=UDim2.new(0,3,0.6,0) indicator.Position=UDim2.new(0,0,0.2,0)
     indicator.BackgroundColor3=C.green indicator.BorderSizePixel=0 indicator.Visible=false
     Instance.new("UICorner",indicator).CornerRadius=UDim.new(0,2)
 
-    -- content page
     local page=Instance.new("ScrollingFrame",contentArea) page.Size=UDim2.new(1,0,1,0) page.BackgroundTransparency=1
     page.BorderSizePixel=0 page.ScrollBarThickness=3 page.ScrollBarImageColor3=C.green
     page.CanvasSize=UDim2.new(0,0,0,0) page.AutomaticCanvasSize=Enum.AutomaticSize.Y page.Visible=false
@@ -565,17 +578,7 @@ local function addTab(tabName)
     allPages[tabName]=page
     allTabBtns[tabName]=tb
 
-    tb.MouseButton1Click:Connect(function()
-        for n,pg in pairs(allPages) do pg.Visible=(n==tabName) end
-        for n,bt in pairs(allTabBtns) do
-            bt.BackgroundColor3=(n==tabName) and C.card or C.sidebar
-            bt.TextColor3=(n==tabName) and C.text or C.dim
-            bt.Font=(n==tabName) and Enum.Font.GothamBold or Enum.Font.Gotham
-            local ind=bt:FindFirstChild("Indicator")
-            if ind then ind.Visible=(n==tabName) end
-        end
-        activeTab=tabName
-    end)
+    tb.MouseButton1Click:Connect(function() switchTab(tabName) end)
 
     return page
 end
@@ -595,12 +598,7 @@ addCategory("PLAYER")
 local playerP=addTab("Player")
 
 -- activate first tab
-allTabBtns["Farming"].MouseButton1Click:Fire()
-allPages["Farming"].Visible=true
-allTabBtns["Farming"].BackgroundColor3=C.card
-allTabBtns["Farming"].TextColor3=C.text
-allTabBtns["Farming"].Font=Enum.Font.GothamBold
-local fInd=allTabBtns["Farming"]:FindFirstChild("Indicator") if fInd then fInd.Visible=true end
+switchTab("Farming")
 
 -- ═══ UI HELPERS ═══
 local function sec(p,t)

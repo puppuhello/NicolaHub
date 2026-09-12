@@ -1575,11 +1575,21 @@ function fishLoop()
         if bp then
             for _,t in pairs(bp:GetChildren()) do
                 if t:IsA("Tool") and (t.Name:lower():find("fish") or t.Name:lower():find("rod") or t.Name:lower():find("canna") or t.Name:lower():find("pole") or t.Name:lower():find("harpoon")) then
-                    h:EquipTool(t) print("[NH] 🎣 Equipaggiato (auto): "..t.Name) task.wait(0.3) return true
+                    h:EquipTool(t) print("[NH] 🎣 Equipaggiato (auto): "..t.Name)
+                    S.fishTool = t.Name saveConfig()
+                    task.wait(0.3) return true
+                end
+            end
+            -- ultimo fallback: equippa il PRIMO tool disponibile
+            for _,t in pairs(bp:GetChildren()) do
+                if t:IsA("Tool") then
+                    h:EquipTool(t) print("[NH] 🎣 Equipaggiato (primo disponibile): "..t.Name)
+                    S.fishTool = t.Name saveConfig()
+                    task.wait(0.3) return true
                 end
             end
         end
-        print("[NH] ⚠ Nessun fishing tool! Seleziona una canna nel tab Fishing.")
+        print("[NH] ⚠ Nessun tool nell'inventario!")
         return false
     end
 

@@ -1758,8 +1758,16 @@ function fishLoop()
         pcall(function()
             local boatPrimary = boat.PrimaryPart or boat:FindFirstChildWhichIsA("BasePart")
             if not boatPrimary then return end
-            -- metti la barca sotto il player (sulla superficie dell'acqua)
-            local boatTarget = CFrame.new(targetPos.X, targetPos.Y - 5, targetPos.Z)
+            -- trova il livello dell'acqua tramite raycast giù
+            local waterY = 0 -- default livello mare
+            local rayOrigin = Vector3.new(targetPos.X, targetPos.Y + 100, targetPos.Z)
+            local rayResult = workspace:Raycast(rayOrigin, Vector3.new(0, -500, 0))
+            if rayResult then
+                waterY = rayResult.Position.Y + 1
+            end
+            -- barca sulla superficie, mai sotto terra
+            local boatY = math.max(waterY, 0)
+            local boatTarget = CFrame.new(targetPos.X, boatY, targetPos.Z)
             if boat.PrimaryPart then
                 boat:SetPrimaryPartCFrame(boatTarget)
             else
@@ -1949,14 +1957,17 @@ function fishLoop()
         -- STEP 3: vai al fish spot e porta la barca
         local spot, spotDist = findFishSpot()
         if spot then
+            -- fly SOPRA lo spot, mai sotto Y=5
+            local flyY = math.max(spot.Position.Y + 5, 5)
+            local flyTarget = Vector3.new(spot.Position.X, flyY, spot.Position.Z)
             fishStatus.Text="🎣 Volo al spot → "..math.floor(spotDist).."m"
             ensureFly()
 
             local arr = false
             while S.fishOn and alive() and not arr and gui.Parent do
                 ensureFly()
-                arr = flyTo(spot.Position + Vector3.new(0,3,0))
-                -- muovi la barca insieme al player
+                arr = flyTo(flyTarget)
+                -- muovi la barca alla posizione dello spot (superficie)
                 if myBoat and myBoat.Parent then
                     moveBoatTo(myBoat, spot.Position)
                 end

@@ -1558,7 +1558,7 @@ function fishLoop()
             return true
         end
 
-        -- METODO 1: Backpack standard
+        -- prova Backpack standard
         local bp = plr:FindFirstChild("Backpack")
         if bp then
             for _,t in pairs(bp:GetChildren()) do
@@ -1569,91 +1569,8 @@ function fishLoop()
             end
         end
 
-        -- METODO 2: cerca TUTTI i remotes equip nel gioco e prova con nomi di canne
-        local fishNames = {"Harpoon","Fishing Rod","Rod","Fish Rod","Canna","Pole","Fishing Pole","Basic Rod","Iron Rod","Steel Rod","Golden Rod"}
-        pcall(function()
-            local rs = game:GetService("ReplicatedStorage")
-            for _,r in pairs(rs:GetDescendants()) do
-                if r:IsA("RemoteEvent") or r:IsA("RemoteFunction") then
-                    local nm = r.Name:lower()
-                    if nm:find("equip") or nm:find("item") or nm:find("use") or nm:find("tool") or nm:find("weapon") or nm:find("slot") then
-                        print("[NH] 🔧 Remote: "..r:GetFullName())
-                        for _,fishName in ipairs(fishNames) do
-                            pcall(function()
-                                if r:IsA("RemoteEvent") then
-                                    r:FireServer(fishName)
-                                    r:FireServer("equip", fishName)
-                                    r:FireServer({item=fishName})
-                                    r:FireServer({name=fishName, action="equip"})
-                                else
-                                    r:InvokeServer(fishName)
-                                    r:InvokeServer("equip", fishName)
-                                end
-                            end)
-                        end
-                        -- prova anche slot numbers
-                        for slot=1,9 do
-                            pcall(function()
-                                if r:IsA("RemoteEvent") then
-                                    r:FireServer(slot)
-                                end
-                            end)
-                        end
-                    end
-                end
-            end
-        end)
-
-        -- METODO 3: cerca bottoni nella PlayerGui con nomi di canne e clicca
-        pcall(function()
-            local pg = plr:FindFirstChild("PlayerGui")
-            if not pg then return end
-            for _,obj in pairs(pg:GetDescendants()) do
-                if (obj:IsA("TextButton") or obj:IsA("ImageButton")) then
-                    local txt = obj:IsA("TextButton") and (obj.Text or ""):lower() or ""
-                    local nm = obj.Name:lower()
-                    if nm:find("harpoon") or nm:find("rod") or nm:find("fishing") or nm:find("canna") or
-                       txt:find("harpoon") or txt:find("rod") or txt:find("fishing") or txt:find("equip") then
-                        print("[NH] 🎣 GUI bottone trovato: "..obj.Name.." text="..(obj:IsA("TextButton") and obj.Text or "img"))
-                        pcall(function() fireclick(obj) end)
-                        task.wait(0.3)
-                        -- check se equipaggiato
-                        local eq = c:FindFirstChildOfClass("Tool")
-                        if eq then
-                            S.fishTool = eq.Name saveConfig()
-                            print("[NH] 🎣 Equipaggiato via GUI: "..eq.Name)
-                            return
-                        end
-                    end
-                end
-            end
-        end)
-
-        -- METODO 4: simula tasti hotbar 1-6
-        pcall(function()
-            if VIM then
-                local keys = {Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four, Enum.KeyCode.Five, Enum.KeyCode.Six}
-                for i,key in ipairs(keys) do
-                    VIM:SendKeyEvent(true, key, false, game)
-                    task.wait(0.05)
-                    VIM:SendKeyEvent(false, key, false, game)
-                    task.wait(0.3)
-                    local eq = c:FindFirstChildOfClass("Tool")
-                    if eq then
-                        S.fishTool = eq.Name saveConfig()
-                        print("[NH] 🎣 Equipaggiato tasto "..i..": "..eq.Name)
-                        return
-                    end
-                end
-            end
-        end)
-
-        -- check finale
-        task.wait(0.5)
-        local ft = c:FindFirstChildOfClass("Tool")
-        if ft then S.fishTool=ft.Name saveConfig() return true end
-
-        fishStatus.Text="⚠ Equippa canna manualmente!"
+        -- il gioco usa inventario custom — l'utente deve equipaggiare manualmente
+        -- ma proviamo a continuare comunque (il gioco potrebbe non richiedere un Tool)
         return false
     end
 
@@ -1912,103 +1829,44 @@ function fishLoop()
             continue
         end
 
-        -- STEP 1: equipa fishing tool
-        fishStatus.Text="🎣 Equippo fishing tool..."
-        if not equipFishTool() then
-            fishStatus.Text="⚠ No fishing tool!"
-            task.wait(3)
-            continue
-        end
+        -- STEP 1: equipa fishing tool (non blocca se non trova)
+        equipFishTool()
 
-        -- STEP 2: trova la barca (spawnata dall'utente)
+        -- STEP 2: trova la barca
         local myBoat = findMyBoat()
         if not myBoat then
             fishStatus.Text="🚤 Spawna barca dal menu!"
-            print("[NH] ⚠ Nessuna barca trovata! L'utente deve spawnarla dal menu Boats")
-            -- prova a cercare remotes per spawn
+            -- prova remotes
             pcall(function()
                 local rs = game:GetService("ReplicatedStorage")
                 for _,r in pairs(rs:GetDescendants()) do
                     if (r:IsA("RemoteEvent") or r:IsA("RemoteFunction")) then
                         local nm = r.Name:lower()
-                        if nm:find("boat") and (nm:find("spawn") or nm:find("place") or nm:find("summon") or nm:find("deploy")) then
-                            print("[NH] 🚤 Provo remote: "..r:GetFullName())
+                        if nm:find("boat") and (nm:find("spawn") or nm:find("place") or nm:find("summon")) then
                             if r:IsA("RemoteEvent") then
                                 pcall(function() r:FireServer("Fishing Boat") end)
-                                pcall(function() r:FireServer("Coffin Boat") end)
                                 pcall(function() r:FireServer(1) end)
-                                pcall(function() r:FireServer() end)
-                            else
-                                pcall(function() r:InvokeServer("Fishing Boat") end)
                             end
                         end
                     end
                 end
             end)
-            task.wait(2)
-            myBoat = findMyBoat()
+            -- aspetta 15s max
+            local waited = 0
+            while not myBoat and S.fishOn and waited < 15 do
+                fishStatus.Text="🚤 Spawna barca! ("..math.floor(15-waited).."s)"
+                task.wait(2)
+                waited = waited + 2
+                myBoat = findMyBoat()
+            end
             if not myBoat then
-                -- aspetta che l'utente spawni la barca
-                local waited = 0
-                while not myBoat and S.fishOn and waited < 30 do
-                    fishStatus.Text="🚤 Spawna barca dal menu! ("..math.floor(30-waited).."s)"
-                    task.wait(2)
-                    waited = waited + 2
-                    myBoat = findMyBoat()
-                end
-                if not myBoat then
-                    fishStatus.Text="⚠ Pesco senza barca..."
-                    print("[NH] ⚠ Timeout barca, provo a pescare comunque")
-                end
-            end
-        else
-            print("[NH] 🚤 Barca trovata: "..myBoat:GetFullName())
-        end
-
-        -- STEP 2.5: vola alla barca e siediti
-        if myBoat and myBoat.Parent then
-            local boatPart = myBoat.PrimaryPart or myBoat:FindFirstChildWhichIsA("BasePart")
-            if boatPart then
-                local r = hrpf()
-                if r then
-                    local boatDist = (r.Position - boatPart.Position).Magnitude
-                    if boatDist > 15 then
-                        fishStatus.Text="🚤 Volo alla barca → "..math.floor(boatDist).."m"
-                        ensureFly()
-                        local arr = false
-                        while S.fishOn and alive() and not arr and gui.Parent do
-                            ensureFly()
-                            arr = flyTo(boatPart.Position + Vector3.new(0,5,0))
-                            task.wait(0.05)
-                        end
-                        flyStop()
-                    end
-                end
-
-                -- siediti sulla barca (cerca Seat/VehicleSeat)
-                task.wait(0.3)
-                pcall(function()
-                    local seat = myBoat:FindFirstChildWhichIsA("VehicleSeat") or myBoat:FindFirstChildWhichIsA("Seat")
-                    if seat and seat:IsA("BasePart") then
-                        local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
-                        if hum and not hum.SeatPart then
-                            hum:Sit(true) -- force sit state
-                            -- weld o teleport al seat
-                            local hrp = hrpf()
-                            if hrp then
-                                hrp.CFrame = seat.CFrame + Vector3.new(0,2,0)
-                            end
-                            print("[NH] 🚤 Seduto sulla barca!")
-                        end
-                    end
-                end)
+                fishStatus.Text="⚠ No barca, pesco comunque..."
             end
         end
 
-        -- STEP 3: vai al fish spot
+        -- STEP 3: vola al fish spot
         local spot, spotDist = findFishSpot()
         if spot then
-            -- fly SOPRA lo spot, mai sotto Y=5
             local flyY = math.max(spot.Position.Y + 5, 5)
             local flyTarget = Vector3.new(spot.Position.X, flyY, spot.Position.Z)
             fishStatus.Text="🎣 Volo al spot → "..math.floor(spotDist).."m"
@@ -2024,22 +1882,20 @@ function fishLoop()
             if arr and S.fishOn then
                 flyStop()
 
-                -- posiziona barca sotto il player (sulla superficie)
+                -- TP barca sotto il player (sulla superficie acqua)
                 if myBoat and myBoat.Parent then
                     moveBoatTo(myBoat, spot.Position)
-                    -- ri-posiziona player sulla barca
-                    task.wait(0.2)
+                    task.wait(0.3)
+                    -- metti player SOPRA la barca
                     local r = hrpf()
-                    local boatPart = myBoat.PrimaryPart or myBoat:FindFirstChildWhichIsA("BasePart")
-                    if r and boatPart then
-                        r.CFrame = CFrame.new(boatPart.Position + Vector3.new(0,3,0))
+                    local bp = myBoat.PrimaryPart or myBoat:FindFirstChildWhichIsA("BasePart")
+                    if r and bp then
+                        r.CFrame = CFrame.new(bp.Position.X, bp.Position.Y + 4, bp.Position.Z)
                     end
                 end
 
                 fishStatus.Text="🎣 Pesco..."
-
-                -- equipa canna
-                equipFishTool()
+                equipFishTool() -- ri-prova equip
                 task.wait(0.3)
 
                 doFish(spot)

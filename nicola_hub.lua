@@ -1371,8 +1371,13 @@ function dungeonLoop()
             dLog("Volo a "..gate.Name.." → "..math.floor(gateDist).."m Y="..math.floor(targetY))
             dungStatus.Text = "🏰 Volo → "..gate.Name.." "..math.floor(gateDist).."m"
 
-            -- DECOLLA prima!
-            flyUp(30)
+            -- DECOLLA: sali 30 studs prima di volare orizzontale
+            ensureFly()
+            if flyBV then
+                flyBV.Velocity = Vector3.new(0, 150, 0)
+                task.wait(1)
+                flyBV.Velocity = Vector3.zero
+            end
             dLog("Decollato! alive="..tostring(alive()))
 
             -- VOLA AL GATE

@@ -1191,43 +1191,78 @@ local function buildRankSelector()
 end
 buildRankSelector()
 
-sec(dungP,"DEBUG")
-btn(dungP,"🔍 Scan Workspace (F9)",C.green,function()
-    print("[NH] ========== SCAN WORKSPACE ==========")
-    -- stampa tutte le cartelle principali
-    print("[NH] --- Cartelle principali ---")
+sec(dungP,"LOG")
+-- log box nel GUI
+local logScroll = Instance.new("ScrollingFrame", dungP)
+logScroll.Size = UDim2.new(1,-10,0,150)
+logScroll.BackgroundColor3 = Color3.fromRGB(10,10,15)
+logScroll.BorderSizePixel = 0
+logScroll.ScrollBarThickness = 4
+logScroll.CanvasSize = UDim2.new(0,0,0,0)
+logScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+Instance.new("UICorner", logScroll).CornerRadius = UDim.new(0,6)
+local logText = Instance.new("TextLabel", logScroll)
+logText.Size = UDim2.new(1,-8,0,0)
+logText.Position = UDim2.new(0,4,0,0)
+logText.BackgroundTransparency = 1
+logText.TextColor3 = Color3.fromRGB(180,255,180)
+logText.TextSize = 10
+logText.Font = Enum.Font.Code
+logText.TextXAlignment = Enum.TextXAlignment.Left
+logText.TextYAlignment = Enum.TextYAlignment.Top
+logText.TextWrapped = true
+logText.AutomaticSize = Enum.AutomaticSize.Y
+logText.Text = ""
+logText.RichText = true
+
+local logLines = {}
+local function dLog(msg)
+    print("[NH] "..msg)
+    table.insert(logLines, msg)
+    if #logLines > 50 then table.remove(logLines, 1) end
+    logText.Text = table.concat(logLines, "\n")
+    -- scroll giù
+    pcall(function()
+        logScroll.CanvasPosition = Vector2.new(0, logText.AbsoluteSize.Y)
+    end)
+end
+
+btn(dungP,"🔍 Scan Gates",C.green,function()
+    dLog("========== SCAN ==========")
+    dLog("--- Cartelle principali ---")
     for _,ch in pairs(workspace:GetChildren()) do
-        print("[NH] "..ch.ClassName..": "..ch.Name)
+        dLog(ch.ClassName..": "..ch.Name)
     end
-    -- cerca qualsiasi cosa con gate/portal/dungeon/rift/rank
-    print("[NH] --- Cerca gate/portal/dungeon/rift/rank ---")
+    dLog("--- Cerca gate/portal/dungeon ---")
     local found = 0
     for _,obj in pairs(workspace:GetDescendants()) do
         local nm = obj.Name:lower()
-        if nm:find("gate") or nm:find("portal") or nm:find("dungeon") or nm:find("rift") or nm:find("rank") or nm:find("spawn") or nm:find("blue") or nm:find("red") then
-            print("[NH] ✅ "..obj.ClassName..": "..obj:GetFullName())
+        if nm:find("gate") or nm:find("portal") or nm:find("dungeon") or nm:find("rift") or nm:find("rank") or nm:find("blue") or nm:find("red") then
+            dLog("✅ "..obj.ClassName..": "..obj:GetFullName())
             found = found + 1
-            if found >= 30 then print("[NH] ... (troppi risultati)") break end
+            if found >= 30 then dLog("...(max)") break end
         end
     end
-    if found == 0 then print("[NH] ❌ Niente trovato con gate/portal/dungeon/rift/rank/spawn/blue/red") end
-    -- cerca ProximityPrompts
-    print("[NH] --- Tutti i ProximityPrompt ---")
-    local pCount = 0
+    if found == 0 then dLog("❌ Niente trovato") end
+    dLog("--- ProximityPrompt ---")
+    local pC = 0
     for _,obj in pairs(workspace:GetDescendants()) do
         if obj:IsA("ProximityPrompt") then
-            print("[NH] 📌 Prompt: "..obj:GetFullName().." | Action: "..(obj.ActionText or "").." | Object: "..(obj.ObjectText or ""))
-            pCount = pCount + 1
-            if pCount >= 20 then break end
+            dLog("📌 "..obj:GetFullName().." | "..(obj.ActionText or "").." | "..(obj.ObjectText or ""))
+            pC = pC + 1
+            if pC >= 15 then break end
         end
     end
-    print("[NH] ========== FINE SCAN ("..found.." gate, "..pCount.." prompt) ==========")
+    dLog("=== FINE ("..found.." gate, "..pC.." prompt) ===")
 end)
-lbl(dungP,"Premi Scan e guarda F9")
+btn(dungP,"🗑 Pulisci Log",C.card,function()
+    logLines = {}
+    logText.Text = ""
+end)
 
 -- ═══ DUNGEON LOOP ═══
 function dungeonLoop()
-    print("[NH] 🏰 Dungeon ON — Rank: "..(S.dungRank ~= "" and S.dungRank or "Tutti"))
+    dLog("🏰 Dungeon ON — Rank: "..(S.dungRank ~= "" and S.dungRank or "Tutti"))
     dungStatus.Text = "🔍 Cerco gate..."
 
     -- === HELPER: trova gate nel workspace ===
@@ -1289,7 +1324,7 @@ function dungeonLoop()
                 for _,pp in pairs(t:GetDescendants()) do
                     if pp:IsA("ProximityPrompt") then
                         fireproximityprompt(pp)
-                        print("[NH] 🏰 Prompt gate fired: "..pp:GetFullName())
+                        dLog("🏰 Prompt fired: "..pp:GetFullName())
                     end
                 end
             end
@@ -1338,7 +1373,7 @@ function dungeonLoop()
                 if (r:IsA("RemoteEvent") or r:IsA("RemoteFunction")) then
                     local nm = r.Name:lower()
                     if nm:find("gate") or nm:find("dungeon") or nm:find("enter") or nm:find("join") or nm:find("portal") then
-                        print("[NH] 🏰 Remote: "..r:GetFullName())
+                        dLog("🏰 Remote: "..r:GetFullName())
                         pcall(function()
                             if r:IsA("RemoteEvent") then
                                 r:FireServer()
@@ -1366,7 +1401,7 @@ function dungeonLoop()
         local gate, gateDist = findGate()
         if gate then
             local gateName = gate.Name
-            print("[NH] 🏰 Trovato gate: "..gateName.." a "..math.floor(gateDist).."m")
+            dLog("🏰 Trovato gate: "..gateName.." a "..math.floor(gateDist).."m")
 
             -- calcola posizione target
             local targetPos
@@ -1383,7 +1418,7 @@ function dungeonLoop()
                 -- vola al gate
                 dungStatus.Text = "🏰 Volo → "..gateName.." "..math.floor(gateDist).."m"
                 ensureFly()
-                print("[NH] 🏰 Fly attivato, target: "..tostring(targetPos))
+                dLog("🏰 Fly attivato → "..tostring(targetPos))
 
                 local arrived = false
                 local flyAttempts = 0
@@ -1408,12 +1443,12 @@ function dungeonLoop()
                     task.wait(0.05)
                 end
 
-                print("[NH] 🏰 Fly finito: arrived="..tostring(arrived).." attempts="..flyAttempts)
+                dLog("🏰 Fly finito: arrived="..tostring(arrived).." attempts="..flyAttempts)
 
                 if arrived and S.dungOn then
                     flyStop()
                     dungStatus.Text = "🏰 Entro nel gate..."
-                    print("[NH] 🏰 Arrivato al gate, provo ad entrare...")
+                    dLog("🏰 Arrivato! Provo ad entrare...")
 
                     -- prova ad entrare più volte
                     for i=1,8 do
@@ -1427,7 +1462,7 @@ function dungeonLoop()
                 elseif not arrived then
                     flyStop()
                     dungStatus.Text = "⚠ Non arrivo al gate..."
-                    print("[NH] ⚠ Fly fallito dopo "..flyAttempts.." tentativi")
+                    dLog("⚠ Fly fallito dopo "..flyAttempts.." tentativi")
                     task.wait(3)
                 end
             else

@@ -1238,126 +1238,99 @@ function dungeonLoop()
     dLog("🏰 Dungeon ON — Rank: "..(S.dungRank ~= "" and S.dungRank or "Tutti"))
     dungStatus.Text = "🔍 Cerco gate..."
 
-    -- === HELPER: trova gate nel workspace ===
+    -- === HELPER: trova gate nel workspace.Gates ===
     local function findGate()
         local r = hrpf()
         if not r then return nil, math.huge end
-        local best, bestD = nil, math.huge
+        local best, bestD, bestInfo = nil, math.huge, ""
 
-        for _,obj in pairs(workspace:GetDescendants()) do
-            if obj:IsA("Model") or obj:IsA("BasePart") then
-                local nm = obj.Name:lower()
-                if nm:find("gate") or nm:find("dungeon") or nm:find("portal") or nm:find("rift") then
-                    -- filtro per rank
+        local gatesFolder = workspace:FindFirstChild("Gates")
+        if not gatesFolder then
+            dLog("Cartella Gates non trovata!")
+            return nil, math.huge
+        end
+
+        for _,gateModel in pairs(gatesFolder:GetChildren()) do
+            local nm = gateModel.Name
+            if nm:find("Gate") then
+                local gateChild = gateModel:FindFirstChild("Gate")
+                if gateChild then
+                    -- leggi Rank (StringValue)
+                    local rankObj = gateChild:FindFirstChild("Rank")
+                    local rankVal = rankObj and rankObj:IsA("StringValue") and rankObj.Value or "?"
+
+                    -- leggi info extra
+                    local levelObj = gateChild:FindFirstChild("Level")
+                    local lvl = levelObj and levelObj.Value or 0
+                    local mapObj = gateChild:FindFirstChild("MapName")
+                    local mapN = mapObj and mapObj.Value or "?"
+                    local bossObj = gateChild:FindFirstChild("Boss")
+                    local bossN = bossObj and bossObj.Value or ""
+
+                    -- filtro per rank selezionato
                     if S.dungRank ~= "" then
-                        local rankInName = obj.Name:match("([EDCBAS])%-rank") or obj.Name:match("([EDCBAS])_rank") or obj.Name:match("([EDCBAS])rank")
-                        -- check anche nel parent
-                        if not rankInName and obj.Parent then
-                            rankInName = obj.Parent.Name:match("([EDCBAS])%-rank") or obj.Parent.Name:match("([EDCBAS])_rank")
-                        end
-                        -- check BillboardGui/TextLabel per rank
-                        if not rankInName then
-                            for _,ch in pairs(obj:GetDescendants()) do
-                                if ch:IsA("TextLabel") then
-                                    local txt = ch.Text or ""
-                                    rankInName = txt:match("([EDCBAS])%-rank") or txt:match("([EDCBAS])%-Rank")
-                                    if rankInName then break end
-                                end
-                            end
-                        end
-                        if rankInName and rankInName:upper() ~= S.dungRank:upper() then
-                            continue -- skip, rank sbagliato
+                        if rankVal:upper() ~= S.dungRank:upper() then
+                            continue
                         end
                     end
 
-                    local pos
-                    if obj:IsA("Model") then
-                        pos = (obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChildWhichIsA("BasePart"))
-                        if pos then pos = pos.Position end
-                    else
-                        pos = obj.Position
-                    end
-                    if pos then
-                        local d = (r.Position - pos).Magnitude
-                        if d < bestD then best, bestD = obj, d end
+                    -- trova posizione
+                    local part = gateModel:FindFirstChildWhichIsA("BasePart", true)
+                    if part then
+                        local d = (r.Position - part.Position).Magnitude
+                        if d < bestD then
+                            best = gateModel
+                            bestD = d
+                            local info = nm.." | "..rankVal.."-rank Lv"..lvl.." | "..mapN
+                            if bossN ~= "" then info = info.." | Boss: "..bossN end
+                            bestInfo = info
+                        end
                     end
                 end
             end
         end
+
+        if best then dLog("Trovato: "..bestInfo.." ("..math.floor(bestD).."m)") end
         return best, bestD
     end
 
     -- === HELPER: entra nel gate ===
     local function enterGate(gate)
-        -- ProximityPrompt
+        local gateChild = gate:FindFirstChild("Gate")
+        if not gateChild then
+            dLog("Gate child non trovato in "..gate.Name)
+            return
+        end
+
+        -- JoinParty RemoteEvent
+        local joinParty = gateChild:FindFirstChild("JoinParty")
+        if joinParty and joinParty:IsA("RemoteEvent") then
+            dLog("Fire JoinParty!")
+            pcall(function() joinParty:FireServer() end)
+            task.wait(0.5)
+            pcall(function() joinParty:FireServer(true) end)
+        else
+            dLog("JoinParty non trovato!")
+        end
+
+        -- anche ProximityPrompt se presente
         pcall(function()
-            local targets = {gate}
-            if gate.Parent then table.insert(targets, gate.Parent) end
-            for _,t in ipairs(targets) do
-                for _,pp in pairs(t:GetDescendants()) do
-                    if pp:IsA("ProximityPrompt") then
-                        fireproximityprompt(pp)
-                        dLog("🏰 Prompt fired: "..pp:GetFullName())
-                    end
+            for _,pp in pairs(gate:GetDescendants()) do
+                if pp:IsA("ProximityPrompt") then
+                    fireproximityprompt(pp)
+                    dLog("Prompt fired!")
                 end
             end
         end)
 
-        -- Touch
+        -- touch sul portale
         pcall(function()
             local hrp = hrpf()
-            local part = gate:IsA("BasePart") and gate or gate:FindFirstChildWhichIsA("BasePart")
+            local part = gate:FindFirstChildWhichIsA("BasePart", true)
             if hrp and part then
                 firetouchinterest(hrp, part, 0)
                 task.wait(0.1)
                 firetouchinterest(hrp, part, 1)
-            end
-        end)
-
-        -- ClickDetector
-        pcall(function()
-            for _,cd in pairs(gate:GetDescendants()) do
-                if cd:IsA("ClickDetector") then
-                    fireclickdetector(cd)
-                end
-            end
-        end)
-
-        -- VIM click
-        pcall(function()
-            if VIM then
-                local part = gate:IsA("BasePart") and gate or gate:FindFirstChildWhichIsA("BasePart")
-                if part then
-                    local cam = workspace.CurrentCamera
-                    local sp, onS = cam:WorldToViewportPoint(part.Position)
-                    if onS then
-                        VIM:SendMouseButtonEvent(sp.X, sp.Y, 0, true, game, 1)
-                        task.wait(0.05)
-                        VIM:SendMouseButtonEvent(sp.X, sp.Y, 0, false, game, 1)
-                    end
-                end
-            end
-        end)
-
-        -- Remotes dungeon
-        pcall(function()
-            local rs = game:GetService("ReplicatedStorage")
-            for _,r in pairs(rs:GetDescendants()) do
-                if (r:IsA("RemoteEvent") or r:IsA("RemoteFunction")) then
-                    local nm = r.Name:lower()
-                    if nm:find("gate") or nm:find("dungeon") or nm:find("enter") or nm:find("join") or nm:find("portal") then
-                        dLog("🏰 Remote: "..r:GetFullName())
-                        pcall(function()
-                            if r:IsA("RemoteEvent") then
-                                r:FireServer()
-                                r:FireServer(gate)
-                                if gate:IsA("Model") then r:FireServer(gate.Name) end
-                            else
-                                r:InvokeServer()
-                            end
-                        end)
-                    end
-                end
             end
         end)
     end

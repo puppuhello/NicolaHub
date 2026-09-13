@@ -1192,11 +1192,14 @@ end
 buildRankSelector()
 
 sec(dungP,"LOG")
-local logText = lbl(dungP,"")
+local logText = lbl(dungP,"(clicca Scan Gates)")
 logText.TextColor3 = Color3.fromRGB(140,255,140)
 logText.TextSize = 9
 logText.Font = Enum.Font.Code
 logText.TextXAlignment = Enum.TextXAlignment.Left
+logText.TextWrapped = true
+logText.Size = UDim2.new(1,0,0,0)
+logText.AutomaticSize = Enum.AutomaticSize.Y
 logText.TextWrapped = true
 
 local logLines = {}

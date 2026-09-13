@@ -1274,10 +1274,15 @@ function dungeonLoop()
                         end
                     end
 
-                    -- trova posizione
-                    local part = gateModel:FindFirstChildWhichIsA("BasePart", true)
-                    if part then
-                        local d = (r.Position - part.Position).Magnitude
+                    -- trova posizione con GetPivot (non parti interne!)
+                    local gatePos
+                    pcall(function() gatePos = gateModel:GetPivot().Position end)
+                    if not gatePos then
+                        local p = gateModel:FindFirstChildWhichIsA("BasePart")
+                        if p then gatePos = p.Position end
+                    end
+                    if gatePos then
+                        local d = (r.Position - gatePos).Magnitude
                         if d < bestD then
                             best = gateModel
                             bestD = d
@@ -1346,16 +1351,24 @@ function dungeonLoop()
 
         local gate, gateDist = findGate()
         if gate then
-            -- prendi posizione dal primo BasePart del gate
-            local targetPart = gate:FindFirstChildWhichIsA("BasePart", true)
-            if not targetPart then
-                dLog("Gate "..gate.Name.." senza BasePart!")
+            -- prendi posizione dal pivot del gate model (non da parti interne!)
+            local gatePos
+            pcall(function() gatePos = gate:GetPivot().Position end)
+            if not gatePos then
+                -- fallback: primo BasePart NON ricorsivo
+                local p = gate:FindFirstChildWhichIsA("BasePart")
+                if p then gatePos = p.Position end
+            end
+            if not gatePos then
+                dLog("Gate "..gate.Name.." senza posizione!")
                 task.wait(2)
                 continue
             end
 
-            local targetPos = targetPart.Position + Vector3.new(0,3,0)
-            dLog("Volo a "..gate.Name.." → "..math.floor(gateDist).."m pos="..tostring(targetPos))
+            -- CLAMP Y: mai sotto terra (minimo Y=5)
+            local targetY = math.max(gatePos.Y + 3, 5)
+            local targetPos = Vector3.new(gatePos.X, targetY, gatePos.Z)
+            dLog("Volo a "..gate.Name.." → "..math.floor(gateDist).."m Y="..math.floor(targetY))
             dungStatus.Text = "🏰 Volo → "..gate.Name.." "..math.floor(gateDist).."m"
 
             -- VOLA AL GATE

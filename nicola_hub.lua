@@ -38,6 +38,7 @@ local S = {
     fishTool="",
     useWeapon=true, useBlessing=false,
     useMagic={},
+    dungOn=false, dungRank="", dungStatus="Idle",
 }
 
 -- ═══ CONFIG SAVE/LOAD ═══
@@ -60,6 +61,7 @@ local function saveConfig()
             noclip = S.noclip,
             primaryTool = S.primaryTool,
             fishTool = S.fishTool,
+            dungRank = S.dungRank,
             selectedMobs = S.selectedMobs,
             selectedOres = S.selectedOres,
             useMagic = S.useMagic,
@@ -87,6 +89,7 @@ local function loadConfig()
         if cfg.noclip ~= nil then S.noclip = cfg.noclip end
         if cfg.primaryTool then S.primaryTool = cfg.primaryTool end
         if cfg.fishTool then S.fishTool = cfg.fishTool end
+        if cfg.dungRank then S.dungRank = cfg.dungRank end
         if cfg.selectedMobs then S.selectedMobs = cfg.selectedMobs end
         if cfg.selectedOres then S.selectedOres = cfg.selectedOres end
         if cfg.useMagic then S.useMagic = cfg.useMagic end
@@ -642,10 +645,11 @@ local function addTab(tabName)
     return page
 end
 
--- build sidebar — 5 tabs semplici
+-- build sidebar — 6 tabs
 local fp=addTab("Farm")
 local fishP=addTab("Fishing")
 local mineP=addTab("Mining")
+local dungP=addTab("Dungeon")
 local playerP=addTab("Player")
 local cfgP=addTab("Config")
 
@@ -1135,6 +1139,251 @@ end
 
 btn(mineP,"🔍 Refresh Minerali",C.green,function() scanOres() end)
 task.defer(scanOres)
+
+-- ═══ DUNGEON PAGE ═══
+local dungToggle
+dungToggle=makeToggle(dungP,"Auto Join Dungeon",false,function(on)
+    S.dungOn=on
+    if on then
+        if S.afOn then S.afOn=false afToggle.setOn(false) end
+        if S.fishOn then S.fishOn=false fishToggle.setOn(false) end
+        if S.mineOn then S.mineOn=false mineToggle.setOn(false) end
+        task.spawn(function()
+            while S.dungOn and gui and gui.Parent do
+                local ok, err = pcall(dungeonLoop)
+                if not ok then print("[NH] DungeonLoop crash: "..tostring(err)) task.wait(3) else break end
+            end
+        end)
+    end
+end,"Monitora la chat per gate e joina automaticamente.")
+local dungStatus=lbl(dungP,"Status: Idle")
+
+sec(dungP,"RANK DA CERCARE")
+local dungRankLabel = lbl(dungP,"Rank: ".. (S.dungRank ~= "" and S.dungRank or "Tutti"))
+
+local rankOptions = {"Tutti","E","D","C","B","A","S"}
+local function buildRankSelector()
+    for _,rank in ipairs(rankOptions) do
+        local isSel = (S.dungRank == rank) or (rank == "Tutti" and S.dungRank == "")
+        local b = Instance.new("TextButton", dungP)
+        b.Size = UDim2.new(0, 45, 0, 28)
+        b.BackgroundColor3 = isSel and C.green or C.card
+        b.TextColor3 = C.text
+        b.Text = rank
+        b.TextSize = 12
+        b.Font = Enum.Font.GothamBold
+        b.BorderSizePixel = 0
+        b.AutomaticSize = Enum.AutomaticSize.None
+        Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+        b.MouseButton1Click:Connect(function()
+            S.dungRank = (rank == "Tutti") and "" or rank
+            saveConfig()
+            dungRankLabel.Text = "Rank: " .. (S.dungRank ~= "" and S.dungRank or "Tutti")
+            -- aggiorna colori
+            for _,ch in pairs(dungP:GetChildren()) do
+                if ch:IsA("TextButton") and ch.TextSize == 12 then
+                    local isThis = (ch.Text == rank)
+                    ch.BackgroundColor3 = isThis and C.green or C.card
+                end
+            end
+        end)
+    end
+end
+buildRankSelector()
+
+sec(dungP,"INFO")
+lbl(dungP,"Monitora la chat per gate.")
+lbl(dungP,"Vola al gate e entra.")
+lbl(dungP,"Cerca anche in workspace.")
+
+-- ═══ DUNGEON LOOP ═══
+function dungeonLoop()
+    print("[NH] 🏰 Dungeon ON — Rank: "..(S.dungRank ~= "" and S.dungRank or "Tutti"))
+    dungStatus.Text = "🔍 Cerco gate..."
+
+    -- === HELPER: trova gate nel workspace ===
+    local function findGate()
+        local r = hrpf()
+        if not r then return nil, math.huge end
+        local best, bestD = nil, math.huge
+
+        for _,obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("Model") or obj:IsA("BasePart") then
+                local nm = obj.Name:lower()
+                if nm:find("gate") or nm:find("dungeon") or nm:find("portal") or nm:find("rift") then
+                    -- filtro per rank
+                    if S.dungRank ~= "" then
+                        local rankInName = obj.Name:match("([EDCBAS])%-rank") or obj.Name:match("([EDCBAS])_rank") or obj.Name:match("([EDCBAS])rank")
+                        -- check anche nel parent
+                        if not rankInName and obj.Parent then
+                            rankInName = obj.Parent.Name:match("([EDCBAS])%-rank") or obj.Parent.Name:match("([EDCBAS])_rank")
+                        end
+                        -- check BillboardGui/TextLabel per rank
+                        if not rankInName then
+                            for _,ch in pairs(obj:GetDescendants()) do
+                                if ch:IsA("TextLabel") then
+                                    local txt = ch.Text or ""
+                                    rankInName = txt:match("([EDCBAS])%-rank") or txt:match("([EDCBAS])%-Rank")
+                                    if rankInName then break end
+                                end
+                            end
+                        end
+                        if rankInName and rankInName:upper() ~= S.dungRank:upper() then
+                            continue -- skip, rank sbagliato
+                        end
+                    end
+
+                    local pos
+                    if obj:IsA("Model") then
+                        pos = (obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChildWhichIsA("BasePart"))
+                        if pos then pos = pos.Position end
+                    else
+                        pos = obj.Position
+                    end
+                    if pos then
+                        local d = (r.Position - pos).Magnitude
+                        if d < bestD then best, bestD = obj, d end
+                    end
+                end
+            end
+        end
+        return best, bestD
+    end
+
+    -- === HELPER: entra nel gate ===
+    local function enterGate(gate)
+        -- ProximityPrompt
+        pcall(function()
+            local targets = {gate}
+            if gate.Parent then table.insert(targets, gate.Parent) end
+            for _,t in ipairs(targets) do
+                for _,pp in pairs(t:GetDescendants()) do
+                    if pp:IsA("ProximityPrompt") then
+                        fireproximityprompt(pp)
+                        print("[NH] 🏰 Prompt gate fired: "..pp:GetFullName())
+                    end
+                end
+            end
+        end)
+
+        -- Touch
+        pcall(function()
+            local hrp = hrpf()
+            local part = gate:IsA("BasePart") and gate or gate:FindFirstChildWhichIsA("BasePart")
+            if hrp and part then
+                firetouchinterest(hrp, part, 0)
+                task.wait(0.1)
+                firetouchinterest(hrp, part, 1)
+            end
+        end)
+
+        -- ClickDetector
+        pcall(function()
+            for _,cd in pairs(gate:GetDescendants()) do
+                if cd:IsA("ClickDetector") then
+                    fireclickdetector(cd)
+                end
+            end
+        end)
+
+        -- VIM click
+        pcall(function()
+            if VIM then
+                local part = gate:IsA("BasePart") and gate or gate:FindFirstChildWhichIsA("BasePart")
+                if part then
+                    local cam = workspace.CurrentCamera
+                    local sp, onS = cam:WorldToViewportPoint(part.Position)
+                    if onS then
+                        VIM:SendMouseButtonEvent(sp.X, sp.Y, 0, true, game, 1)
+                        task.wait(0.05)
+                        VIM:SendMouseButtonEvent(sp.X, sp.Y, 0, false, game, 1)
+                    end
+                end
+            end
+        end)
+
+        -- Remotes dungeon
+        pcall(function()
+            local rs = game:GetService("ReplicatedStorage")
+            for _,r in pairs(rs:GetDescendants()) do
+                if (r:IsA("RemoteEvent") or r:IsA("RemoteFunction")) then
+                    local nm = r.Name:lower()
+                    if nm:find("gate") or nm:find("dungeon") or nm:find("enter") or nm:find("join") or nm:find("portal") then
+                        print("[NH] 🏰 Remote: "..r:GetFullName())
+                        pcall(function()
+                            if r:IsA("RemoteEvent") then
+                                r:FireServer()
+                                r:FireServer(gate)
+                                if gate:IsA("Model") then r:FireServer(gate.Name) end
+                            else
+                                r:InvokeServer()
+                            end
+                        end)
+                    end
+                end
+            end
+        end)
+    end
+
+    -- === MAIN LOOP ===
+    while S.dungOn and gui and gui.Parent do
+        if not alive() then
+            dungStatus.Text = "💀 Morto..."
+            waitForRespawn(20)
+            task.wait(1)
+            continue
+        end
+
+        local gate, gateDist = findGate()
+        if gate then
+            local gateName = gate.Name
+            dungStatus.Text = "🏰 Gate: "..gateName.." → "..math.floor(gateDist).."m"
+            print("[NH] 🏰 Trovato gate: "..gateName.." a "..math.floor(gateDist).."m")
+
+            -- vola al gate
+            ensureFly()
+            local targetPos
+            if gate:IsA("Model") then
+                local p = gate:FindFirstChildWhichIsA("BasePart")
+                if p then targetPos = p.Position + Vector3.new(0,3,0) end
+            else
+                targetPos = gate.Position + Vector3.new(0,3,0)
+            end
+
+            if targetPos then
+                local arr = false
+                while S.dungOn and alive() and not arr and gui.Parent do
+                    ensureFly()
+                    arr = flyTo(targetPos)
+                    local newDist = (hrpf().Position - targetPos).Magnitude
+                    dungStatus.Text = "🏰 Volo → "..gateName.." "..math.floor(newDist).."m"
+                    task.wait(0.05)
+                end
+
+                if arr and S.dungOn then
+                    flyStop()
+                    dungStatus.Text = "🏰 Entro nel gate..."
+
+                    -- prova ad entrare più volte
+                    for i=1,5 do
+                        enterGate(gate)
+                        task.wait(1)
+                    end
+
+                    dungStatus.Text = "✅ Entrato! Cerco prossimo..."
+                    task.wait(5)
+                end
+            end
+        else
+            dungStatus.Text = "🔍 Nessun gate... (cerco ogni 3s)"
+            task.wait(3)
+        end
+
+        task.wait(0.5)
+    end
+    stopFly()
+    dungStatus.Text = "Idle"
+end
 
 -- ═══ PLAYER PAGE ═══
 makeToggle(playerP,"Auto Pickup",S.autoPickup,function(v) S.autoPickup=v saveConfig() end,"Raccoglie automaticamente i drop.")

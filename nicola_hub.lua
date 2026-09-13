@@ -1191,10 +1191,39 @@ local function buildRankSelector()
 end
 buildRankSelector()
 
-sec(dungP,"INFO")
-lbl(dungP,"Monitora la chat per gate.")
-lbl(dungP,"Vola al gate e entra.")
-lbl(dungP,"Cerca anche in workspace.")
+sec(dungP,"DEBUG")
+btn(dungP,"🔍 Scan Workspace (F9)",C.green,function()
+    print("[NH] ========== SCAN WORKSPACE ==========")
+    -- stampa tutte le cartelle principali
+    print("[NH] --- Cartelle principali ---")
+    for _,ch in pairs(workspace:GetChildren()) do
+        print("[NH] "..ch.ClassName..": "..ch.Name)
+    end
+    -- cerca qualsiasi cosa con gate/portal/dungeon/rift/rank
+    print("[NH] --- Cerca gate/portal/dungeon/rift/rank ---")
+    local found = 0
+    for _,obj in pairs(workspace:GetDescendants()) do
+        local nm = obj.Name:lower()
+        if nm:find("gate") or nm:find("portal") or nm:find("dungeon") or nm:find("rift") or nm:find("rank") or nm:find("spawn") or nm:find("blue") or nm:find("red") then
+            print("[NH] ✅ "..obj.ClassName..": "..obj:GetFullName())
+            found = found + 1
+            if found >= 30 then print("[NH] ... (troppi risultati)") break end
+        end
+    end
+    if found == 0 then print("[NH] ❌ Niente trovato con gate/portal/dungeon/rift/rank/spawn/blue/red") end
+    -- cerca ProximityPrompts
+    print("[NH] --- Tutti i ProximityPrompt ---")
+    local pCount = 0
+    for _,obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("ProximityPrompt") then
+            print("[NH] 📌 Prompt: "..obj:GetFullName().." | Action: "..(obj.ActionText or "").." | Object: "..(obj.ObjectText or ""))
+            pCount = pCount + 1
+            if pCount >= 20 then break end
+        end
+    end
+    print("[NH] ========== FINE SCAN ("..found.." gate, "..pCount.." prompt) ==========")
+end)
+lbl(dungP,"Premi Scan e guarda F9")
 
 -- ═══ DUNGEON LOOP ═══
 function dungeonLoop()

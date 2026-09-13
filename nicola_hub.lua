@@ -1192,70 +1192,40 @@ end
 buildRankSelector()
 
 sec(dungP,"LOG")
--- log box nel GUI
-local logScroll = Instance.new("ScrollingFrame", dungP)
-logScroll.Size = UDim2.new(1,-10,0,150)
-logScroll.BackgroundColor3 = Color3.fromRGB(10,10,15)
-logScroll.BorderSizePixel = 0
-logScroll.ScrollBarThickness = 4
-logScroll.CanvasSize = UDim2.new(0,0,0,0)
-logScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-Instance.new("UICorner", logScroll).CornerRadius = UDim.new(0,6)
-local logText = Instance.new("TextLabel", logScroll)
-logText.Size = UDim2.new(1,-8,0,0)
-logText.Position = UDim2.new(0,4,0,0)
-logText.BackgroundTransparency = 1
-logText.TextColor3 = Color3.fromRGB(180,255,180)
-logText.TextSize = 10
+local logText = lbl(dungP,"")
+logText.TextColor3 = Color3.fromRGB(140,255,140)
+logText.TextSize = 9
 logText.Font = Enum.Font.Code
 logText.TextXAlignment = Enum.TextXAlignment.Left
-logText.TextYAlignment = Enum.TextYAlignment.Top
 logText.TextWrapped = true
-logText.AutomaticSize = Enum.AutomaticSize.Y
-logText.Text = ""
-logText.RichText = true
 
 local logLines = {}
 local function dLog(msg)
     print("[NH] "..msg)
     table.insert(logLines, msg)
-    if #logLines > 50 then table.remove(logLines, 1) end
-    logText.Text = table.concat(logLines, "\n")
-    -- scroll giù
-    pcall(function()
-        logScroll.CanvasPosition = Vector2.new(0, logText.AbsoluteSize.Y)
-    end)
+    if #logLines > 30 then table.remove(logLines, 1) end
+    pcall(function() logText.Text = table.concat(logLines, "\n") end)
 end
 
 btn(dungP,"🔍 Scan Gates",C.green,function()
-    dLog("========== SCAN ==========")
-    dLog("--- Cartelle principali ---")
+    dLog("=== SCAN ===")
     for _,ch in pairs(workspace:GetChildren()) do
         dLog(ch.ClassName..": "..ch.Name)
     end
-    dLog("--- Cerca gate/portal/dungeon ---")
+    dLog("--- Gate/Portal ---")
     local found = 0
     for _,obj in pairs(workspace:GetDescendants()) do
         local nm = obj.Name:lower()
         if nm:find("gate") or nm:find("portal") or nm:find("dungeon") or nm:find("rift") or nm:find("rank") or nm:find("blue") or nm:find("red") then
-            dLog("✅ "..obj.ClassName..": "..obj:GetFullName())
+            dLog("✅ "..obj.ClassName..": "..obj.Name.." → "..obj.Parent.Name)
             found = found + 1
-            if found >= 30 then dLog("...(max)") break end
+            if found >= 20 then break end
         end
     end
     if found == 0 then dLog("❌ Niente trovato") end
-    dLog("--- ProximityPrompt ---")
-    local pC = 0
-    for _,obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("ProximityPrompt") then
-            dLog("📌 "..obj:GetFullName().." | "..(obj.ActionText or "").." | "..(obj.ObjectText or ""))
-            pC = pC + 1
-            if pC >= 15 then break end
-        end
-    end
-    dLog("=== FINE ("..found.." gate, "..pC.." prompt) ===")
+    dLog("=== FINE ("..found..") ===")
 end)
-btn(dungP,"🗑 Pulisci Log",C.card,function()
+btn(dungP,"🗑 Pulisci",C.card,function()
     logLines = {}
     logText.Text = ""
 end)

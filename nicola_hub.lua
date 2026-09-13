@@ -1371,8 +1371,11 @@ function dungeonLoop()
             dLog("Volo a "..gate.Name.." → "..math.floor(gateDist).."m Y="..math.floor(targetY))
             dungStatus.Text = "🏰 Volo → "..gate.Name.." "..math.floor(gateDist).."m"
 
+            -- DECOLLA prima!
+            flyUp(30)
+            dLog("Decollato! alive="..tostring(alive()))
+
             -- VOLA AL GATE
-            ensureFly()
             local arrived = false
             local t0 = tick()
             while S.dungOn and alive() and not arrived and gui.Parent and (tick()-t0) < 120 do
@@ -1382,11 +1385,22 @@ function dungeonLoop()
                 local r = hrpf()
                 if r then
                     local d = (r.Position - targetPos).Magnitude
-                    dungStatus.Text = "🏰 Volo → "..gate.Name.." "..math.floor(d).."m"
+                    if math.floor(tick()-t0) % 5 == 0 then
+                        dungStatus.Text = "🏰 Volo → "..gate.Name.." "..math.floor(d).."m"
+                    end
                 end
 
                 task.wait(0.05)
             end
+
+            -- debug perché è uscito dal loop
+            local reason = "ok"
+            if not S.dungOn then reason = "dungOff"
+            elseif not alive() then reason = "morto"
+            elseif not gui.Parent then reason = "guiGone"
+            elseif (tick()-t0) >= 120 then reason = "timeout"
+            end
+            dLog("Fly end: arrived="..tostring(arrived).." t="..math.floor(tick()-t0).."s reason="..reason)
 
             dLog("Fly: arrived="..tostring(arrived).." tempo="..math.floor(tick()-t0).."s")
 

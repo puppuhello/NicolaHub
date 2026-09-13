@@ -1832,23 +1832,62 @@ function fishLoop()
         -- prova equip tool (non blocca)
         equipFishTool()
 
-        -- trova fish spot e vola lì
+        -- trova fish spot
         local spot, spotDist = findFishSpot()
         if spot then
-            local flyY = math.max(spot.Position.Y + 3, 3)
-            local flyTarget = Vector3.new(spot.Position.X, flyY, spot.Position.Z)
-            fishStatus.Text="🎣 Volo → "..math.floor(spotDist).."m"
-            ensureFly()
+            fishStatus.Text="🎣 Spot trovato → "..math.floor(spotDist).."m"
 
-            local arr = false
-            while S.fishOn and alive() and not arr and gui.Parent do
+            -- trova barca del player
+            local myBoat = findMyBoat()
+
+            if myBoat and myBoat.Parent then
+                -- SPOSTA TUTTA LA BARCA allo spot con PivotTo
+                fishStatus.Text="🚤 Sposto barca allo spot..."
+                pcall(function()
+                    -- calcola Y sulla superficie acqua
+                    local waterY = spot.Position.Y
+                    -- raycast per trovare superficie
+                    local rayResult = workspace:Raycast(
+                        Vector3.new(spot.Position.X, spot.Position.Y + 100, spot.Position.Z),
+                        Vector3.new(0, -300, 0)
+                    )
+                    if rayResult then
+                        waterY = math.max(rayResult.Position.Y + 1, 0)
+                    else
+                        waterY = math.max(waterY, 0)
+                    end
+
+                    -- PivotTo muove TUTTO il modello insieme
+                    local targetCF = CFrame.new(spot.Position.X, waterY, spot.Position.Z)
+                    myBoat:PivotTo(targetCF)
+                    print("[NH] 🚤 Barca spostata allo spot con PivotTo!")
+                end)
+
+                task.wait(0.5)
+
+                -- TP player SOPRA la barca
+                pcall(function()
+                    local r = hrpf()
+                    if r then
+                        local boatPos = myBoat:GetPivot().Position
+                        r.CFrame = CFrame.new(boatPos.X, boatPos.Y + 5, boatPos.Z)
+                        print("[NH] 🎣 Player posizionato sopra la barca!")
+                    end
+                end)
+            else
+                -- no barca — vola al spot normalmente
+                fishStatus.Text="🎣 Volo → "..math.floor(spotDist).."m"
                 ensureFly()
-                arr = flyTo(flyTarget)
-                task.wait(0.05)
+                local arr = false
+                while S.fishOn and alive() and not arr and gui.Parent do
+                    ensureFly()
+                    arr = flyTo(spot.Position + Vector3.new(0,3,0))
+                    task.wait(0.05)
+                end
+                if arr then flyStop() end
             end
 
-            if arr and S.fishOn then
-                flyStop()
+            if S.fishOn and alive() then
                 fishStatus.Text="🎣 Pesco..."
                 equipFishTool()
                 task.wait(0.3)

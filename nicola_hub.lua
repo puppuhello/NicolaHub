@@ -1366,42 +1366,73 @@ function dungeonLoop()
         local gate, gateDist = findGate()
         if gate then
             local gateName = gate.Name
-            dungStatus.Text = "🏰 Gate: "..gateName.." → "..math.floor(gateDist).."m"
             print("[NH] 🏰 Trovato gate: "..gateName.." a "..math.floor(gateDist).."m")
 
-            -- vola al gate
-            ensureFly()
+            -- calcola posizione target
             local targetPos
-            if gate:IsA("Model") then
-                local p = gate:FindFirstChildWhichIsA("BasePart")
-                if p then targetPos = p.Position + Vector3.new(0,3,0) end
-            else
-                targetPos = gate.Position + Vector3.new(0,3,0)
-            end
+            pcall(function()
+                if gate:IsA("Model") then
+                    local p = gate:FindFirstChildWhichIsA("BasePart")
+                    if p then targetPos = p.Position + Vector3.new(0,3,0) end
+                else
+                    targetPos = gate.Position + Vector3.new(0,3,0)
+                end
+            end)
 
             if targetPos then
-                local arr = false
-                while S.dungOn and alive() and not arr and gui.Parent do
+                -- vola al gate
+                dungStatus.Text = "🏰 Volo → "..gateName.." "..math.floor(gateDist).."m"
+                ensureFly()
+                print("[NH] 🏰 Fly attivato, target: "..tostring(targetPos))
+
+                local arrived = false
+                local flyAttempts = 0
+                while S.dungOn and alive() and not arrived and gui.Parent and flyAttempts < 2000 do
+                    flyAttempts = flyAttempts + 1
                     ensureFly()
-                    arr = flyTo(targetPos)
-                    local newDist = (hrpf().Position - targetPos).Magnitude
-                    dungStatus.Text = "🏰 Volo → "..gateName.." "..math.floor(newDist).."m"
+
+                    local ok, result = pcall(function() return flyTo(targetPos) end)
+                    if ok and result then
+                        arrived = true
+                    end
+
+                    -- aggiorna distanza
+                    pcall(function()
+                        local r = hrpf()
+                        if r then
+                            local d = (r.Position - targetPos).Magnitude
+                            dungStatus.Text = "🏰 Volo → "..gateName.." "..math.floor(d).."m"
+                        end
+                    end)
+
                     task.wait(0.05)
                 end
 
-                if arr and S.dungOn then
+                print("[NH] 🏰 Fly finito: arrived="..tostring(arrived).." attempts="..flyAttempts)
+
+                if arrived and S.dungOn then
                     flyStop()
                     dungStatus.Text = "🏰 Entro nel gate..."
+                    print("[NH] 🏰 Arrivato al gate, provo ad entrare...")
 
                     -- prova ad entrare più volte
-                    for i=1,5 do
+                    for i=1,8 do
+                        if not S.dungOn then break end
                         enterGate(gate)
-                        task.wait(1)
+                        task.wait(0.8)
                     end
 
                     dungStatus.Text = "✅ Entrato! Cerco prossimo..."
                     task.wait(5)
+                elseif not arrived then
+                    flyStop()
+                    dungStatus.Text = "⚠ Non arrivo al gate..."
+                    print("[NH] ⚠ Fly fallito dopo "..flyAttempts.." tentativi")
+                    task.wait(3)
                 end
+            else
+                dungStatus.Text = "⚠ Gate senza posizione..."
+                task.wait(2)
             end
         else
             dungStatus.Text = "🔍 Nessun gate... (cerco ogni 3s)"

@@ -1829,47 +1829,15 @@ function fishLoop()
             continue
         end
 
-        -- STEP 1: equipa fishing tool (non blocca se non trova)
+        -- prova equip tool (non blocca)
         equipFishTool()
 
-        -- STEP 2: trova la barca
-        local myBoat = findMyBoat()
-        if not myBoat then
-            fishStatus.Text="🚤 Spawna barca dal menu!"
-            -- prova remotes
-            pcall(function()
-                local rs = game:GetService("ReplicatedStorage")
-                for _,r in pairs(rs:GetDescendants()) do
-                    if (r:IsA("RemoteEvent") or r:IsA("RemoteFunction")) then
-                        local nm = r.Name:lower()
-                        if nm:find("boat") and (nm:find("spawn") or nm:find("place") or nm:find("summon")) then
-                            if r:IsA("RemoteEvent") then
-                                pcall(function() r:FireServer("Fishing Boat") end)
-                                pcall(function() r:FireServer(1) end)
-                            end
-                        end
-                    end
-                end
-            end)
-            -- aspetta 15s max
-            local waited = 0
-            while not myBoat and S.fishOn and waited < 15 do
-                fishStatus.Text="🚤 Spawna barca! ("..math.floor(15-waited).."s)"
-                task.wait(2)
-                waited = waited + 2
-                myBoat = findMyBoat()
-            end
-            if not myBoat then
-                fishStatus.Text="⚠ No barca, pesco comunque..."
-            end
-        end
-
-        -- STEP 3: vola al fish spot
+        -- trova fish spot e vola lì
         local spot, spotDist = findFishSpot()
         if spot then
-            local flyY = math.max(spot.Position.Y + 5, 5)
+            local flyY = math.max(spot.Position.Y + 3, 3)
             local flyTarget = Vector3.new(spot.Position.X, flyY, spot.Position.Z)
-            fishStatus.Text="🎣 Volo al spot → "..math.floor(spotDist).."m"
+            fishStatus.Text="🎣 Volo → "..math.floor(spotDist).."m"
             ensureFly()
 
             local arr = false
@@ -1881,21 +1849,8 @@ function fishLoop()
 
             if arr and S.fishOn then
                 flyStop()
-
-                -- TP barca sotto il player (sulla superficie acqua)
-                if myBoat and myBoat.Parent then
-                    moveBoatTo(myBoat, spot.Position)
-                    task.wait(0.3)
-                    -- metti player SOPRA la barca
-                    local r = hrpf()
-                    local bp = myBoat.PrimaryPart or myBoat:FindFirstChildWhichIsA("BasePart")
-                    if r and bp then
-                        r.CFrame = CFrame.new(bp.Position.X, bp.Position.Y + 4, bp.Position.Z)
-                    end
-                end
-
                 fishStatus.Text="🎣 Pesco..."
-                equipFishTool() -- ri-prova equip
+                equipFishTool()
                 task.wait(0.3)
 
                 doFish(spot)
